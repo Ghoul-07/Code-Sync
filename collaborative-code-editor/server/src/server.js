@@ -31,6 +31,22 @@ app.get('/health', (req, res) =>{
 io.on('connection', (socket) =>{
     console.log(`[SOCKET CONNECTED]: ${socket.id}`)
 
+    //User joins a room
+
+    socket.on('join-room', ({roomId, username}) =>{
+        socket.join(roomId)
+        console.log(`[ROOM JOIN]: ${username} (${socket.id} joined room ${roomId})`)
+
+        // notify other users in the room
+        socket.to(roomId).emit('user-joined', {username, socketId: socket.id})
+    })
+
+    // handle live code changes(delta/content)
+    socket.on('code-change', ({roomId, code})=>{
+        //Broadcast the code to everyone in the room except sender
+        socket.to(roomId).emit('code-update', code)
+    })
+    
     socket.on('disconnect', ()=>{
         console.log(`[SOCKET DISCONNECTED]: ${socket.id}`)
     })
@@ -39,5 +55,5 @@ io.on('connection', (socket) =>{
 const PORT = process.env.PORT || 5000
 
 server.listen(PORT, ()=>{
-    console.log(`[SERVER RUNNING]: Listening on PORT ${PORt}`)
+    console.log(`[SERVER RUNNING]: Listening on PORT ${PORT}`)
 })
