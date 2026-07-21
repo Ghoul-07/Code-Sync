@@ -41,12 +41,11 @@ io.on('connection', (socket) =>{
         socket.to(roomId).emit('user-joined', {username, socketId: socket.id})
     })
 
-    // handle live code changes(delta/content)
-    socket.on('code-change', ({roomId, code})=>{
-        //Broadcast the code to everyone in the room except sender
-        socket.to(roomId).emit('code-update', code)
+    // handle granular delta changes
+    socket.on('code-delta', ({roomId, changes}) =>{
+        socket.to(roomId).emit('receive-delta', changes)
     })
-    
+
     socket.on('disconnect', ()=>{
         console.log(`[SOCKET DISCONNECTED]: ${socket.id}`)
     })

@@ -1,12 +1,25 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import MonacoEditor from "@monaco-editor/react";
 
-const Editor = ({ code, onChange, language = "javascript" }) => {
+const Editor = ({ code, onDeltaChange, language = "javascript" }) => {
   const editorRef = useRef(null);
+  const isApplyingRemoteChange = useRef(false);
 
-  const handleEditorDidMount = (editor) => {
+  const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     editor.focus();
+
+    // Listen to granular content changes (Deltas)
+
+    editor.onDidChangeModelContent((event) => {
+      // if changes came from a remote user, dont re-emit it
+      if (isApplyingRemoteChange.current) return;
+
+      const changes = event.changes;
+      if (onDeltaChange) {
+        onDeltaChange(changes, editor.getValue());
+      }
+    });
   };
 
   return (
@@ -18,7 +31,6 @@ const Editor = ({ code, onChange, language = "javascript" }) => {
         defaultLanguage={language}
         language={language}
         value={code}
-        onChange={onChange}
         onMount={handleEditorDidMount}
         options={{
           fontSize: 14,

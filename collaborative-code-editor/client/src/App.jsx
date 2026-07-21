@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Editor from "./components/Editor";
 import { socket } from "./socket";
 
@@ -9,6 +9,8 @@ function App() {
     '// Welcome to Collaborative Code Editor!\n// Start typing code here...\n\nfunction hello() {\n  console.log("Hello World!");\n}',
   );
 
+  const editorRef = useRef(null);
+
   useEffect(() => {
     socket.emit("join-room", {
       roomId: ROOM_ID,
@@ -17,26 +19,27 @@ function App() {
 
     //Listening for incoming updates from other clients
 
-    socket.on("code-update", (newCode) => {
-      setCode(newCode);
+    socket.on("receive-delta", (changes) => {
+      console.log("[DELTA RECEIVED:]", changes);
     });
 
     // clean up socket listeners
     return () => {
-      socket.off("code-update");
+      socket.off("receive-delta");
     };
   }, []);
-  function handleCodeChange(value) {
-    const updatedCode = value || "";
-    setCode(updatedCode);
 
-    // emit code change event to server
-    socket.emit("code-change", { roomId: ROOM_ID, code: updatedCode });
+  function handleCodeChange(changes, fullCode) {
+    setCode(fullCode);
+    console.log("[DELTA EMITTED]:", changes);
+
+    // emit only the lightweight delta to server
+    socket.emit("code-delta", { roomId: ROOM_ID, changes });
   }
 
   return (
     <div className="app-container">
-      <Editor code={code} onChange={handleCodeChange}></Editor>
+      <Editor code={code} onDeltaChange={handleCodeChange}></Editor>
     </div>
   );
 }
