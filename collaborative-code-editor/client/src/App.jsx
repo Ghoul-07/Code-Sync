@@ -1,19 +1,50 @@
 import React, { useState, useEffect, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import {
+  Routes,
+  Route,
+  useParams,
+  useLocation,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
+import Home from "./pages/Home";
 import Editor from "./components/Editor";
 import { socket } from "./socket";
 
-const ROOM_ID = "demo-room";
+function EditorPage() {
+  const { roomId } = useParams();
+  const location = useLocation();
 
-function App() {
+  const username =
+    location.state?.username || "User-" + Math.floor(Math.random() * 1000);
+
   const [code, setCode] = useState("");
   const [activeUsers, setActiveUsers] = useState([]);
   const editorRef = useRef(null);
 
+  const navigate = useNavigate();
+
+  const copyRoomId = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      toast.success("Room ID copied to clipboard!", {
+        style: { background: "#333", color: "#fff" },
+      });
+    } catch (err) {
+      toast.error("Failed to copy Room ID");
+    }
+  };
+
+  const handleLeave = () => {
+    socket.emit("leave-room", { roomId });
+    navigate("/");
+  };
+
   useEffect(() => {
     socket.emit("join-room", {
-      roomId: ROOM_ID,
-      username: "User-" + Math.floor(Math.random() * 1000),
+      roomId,
+      username,
     });
 
     socket.on("room-init", ({ code: initialCode, users }) => {
@@ -59,17 +90,17 @@ function App() {
       socket.off("user-left");
       socket.off("receive-cursor");
     };
-  }, []);
+  }, [roomId, username]);
 
   const handleDeltaChange = (changes, fullCode) => {
     setCode(fullCode);
-    socket.emit("code-delta", { roomId: ROOM_ID, changes, fullCode });
+    socket.emit("code-delta", { roomId, changes, fullCode });
   };
 
   const handleCursorChange = (cursor, selection) => {
     console.log("[CURSOR]: ", cursor);
     socket.emit("cursor-position", {
-      roomId: ROOM_ID,
+      roomId,
       cursor,
       selection,
     });
@@ -93,9 +124,44 @@ function App() {
           color: "#ccc",
         }}
       >
-        <div style={{ fontWeight: "bold", fontSize: "14px" }}>
-          Room: <span style={{ color: "#4ec9b0" }}>{ROOM_ID}</span>
+        {/* Room Info & Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ fontWeight: "bold", fontSize: "14px" }}>
+            Room: <span style={{ color: "#4ec9b0" }}>{roomId}</span>
+          </div>
+
+          <button
+            onClick={copyRoomId}
+            style={{
+              backgroundColor: "#333",
+              color: "#fff",
+              border: "1px solid #555",
+              padding: "4px 10px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            📋 Copy ID
+          </button>
+
+          <button
+            onClick={handleLeave}
+            style={{
+              backgroundColor: "#f44336",
+              color: "#fff",
+              border: "none",
+              padding: "4px 10px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: "bold",
+            }}
+          >
+            🚪 Leave
+          </button>
         </div>
+
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <span style={{ fontSize: "12px", marginRight: "5px" }}>
             Active Users:
@@ -118,7 +184,8 @@ function App() {
         </div>
       </div>
 
-      {/* Code Editor */}
+      {/* Editor Workspace  */}
+
       <div style={{ flex: 1 }}>
         <Editor
           ref={editorRef}
@@ -131,4 +198,13 @@ function App() {
   );
 }
 
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/editor/:roomId" element={<EditorPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 export default App;
