@@ -1,4 +1,9 @@
-import React, { useRef, useImperativeHandle, forwardRef } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
 import MonacoEditor from "@monaco-editor/react";
 import { socket } from "../socket";
 
@@ -13,6 +18,13 @@ const Editor = forwardRef(
 
     // Expose a method to apply remote changes directly to Monaco
     useImperativeHandle(ref, () => ({
+      setEditorValue: (newCode) => {
+        if (!editorRef.current) return;
+        isApplyingRemoteChange.current = true;
+        editorRef.current.setValue(newCode);
+        isApplyingRemoteChange.current = false;
+      },
+
       applyRemoteDeltas: (changes) => {
         if (!editorRef.current) return;
 
@@ -54,6 +66,7 @@ const Editor = forwardRef(
 
         // Draw vertical cursor bar at user's cursor position
         if (cursor) {
+          const isLineOne = cursor.lineNumber === 1;
           newDecorations.push({
             range: new monaco.Range(
               cursor.lineNumber,
@@ -62,7 +75,7 @@ const Editor = forwardRef(
               cursor.column,
             ),
             options: {
-              className: `${classPrefix}-bar`,
+              className: `${classPrefix}-bar ${isLineOne ? `${classPrefix}-line-1` : ""}`,
               hoverMessage: { value: `**${username}**` },
             },
           });
@@ -129,7 +142,7 @@ const Editor = forwardRef(
     };
 
     return (
-      <div style={{ height: "100vh", width: "100vw" }}>
+      <div style={{ height: "100%", width: "100%" }}>
         <MonacoEditor
           height="100%"
           width="100%"
@@ -155,8 +168,11 @@ const Editor = forwardRef(
 // Inject dynamic CSS rules for remote cursor vertical line and username badge tag
 function injectCursorStyle(classPrefix, color, username) {
   const styleId = `cursor-style-${classPrefix}`;
-  if (document.getElementById(styleId)) return;
-
+  // If style already exists, remove it so we can update positional rules
+  const existingStyle = document.getElementById(styleId);
+  if (existingStyle) {
+    existingStyle.remove();
+  }
   const style = document.createElement("style");
   style.id = styleId;
   style.innerHTML = `
@@ -181,6 +197,10 @@ function injectCursorStyle(classPrefix, color, username) {
       pointer-events: none;
       z-index: 101 !important;
       box-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+    }
+      /* Smart flip: move badge below cursor when user is on line 1 */
+    .${classPrefix}-line-1::after{
+      top: 20px !important;
     }
     .${classPrefix}-selection {
       background-color: ${color}44 !important;

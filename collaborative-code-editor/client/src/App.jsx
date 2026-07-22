@@ -50,6 +50,9 @@ function EditorPage() {
     socket.on("room-init", ({ code: initialCode, users }) => {
       setCode(initialCode);
       setActiveUsers(users);
+      if (editorRef.current) {
+        editorRef.current.setEditorValue(initialCode);
+      }
     });
 
     // Receive deltas from other users and apply them to Monaco!
