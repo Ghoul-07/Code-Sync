@@ -1,48 +1,191 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useImperativeHandle, forwardRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
+import { socket } from "../socket";
 
-const Editor = ({ code, onDeltaChange, language = "javascript" }) => {
-  const editorRef = useRef(null);
-  const isApplyingRemoteChange = useRef(false);
+const Editor = forwardRef(
+  ({ code, onDeltaChange, onCursorChange, language = "javascript" }, ref) => {
+    const editorRef = useRef(null);
+    const monacoRef = useRef(null);
+    const isApplyingRemoteChange = useRef(false);
 
-  const handleEditorDidMount = (editor, monaco) => {
-    editorRef.current = editor;
-    editor.focus();
+    // Track active decoration IDs for each remote user by socketId: { [socketId]: [decorationIds] }
+    const remoteDecorations = useRef(new Map());
 
-    // Listen to granular content changes (Deltas)
+    // Expose a method to apply remote changes directly to Monaco
+    useImperativeHandle(ref, () => ({
+      applyRemoteDeltas: (changes) => {
+        if (!editorRef.current) return;
 
-    editor.onDidChangeModelContent((event) => {
-      // if changes came from a remote user, dont re-emit it
-      if (isApplyingRemoteChange.current) return;
+        isApplyingRemoteChange.current = true;
+        const model = editorRef.current.getModel();
 
-      const changes = event.changes;
-      if (onDeltaChange) {
-        onDeltaChange(changes, editor.getValue());
-      }
-    });
-  };
+        // Convert delta changes into Monaco edit operations
+        const edits = changes.map((change) => ({
+          range: change.range,
+          text: change.text,
+          forceMoveMarkers: true,
+        }));
 
-  return (
-    <div style={{ height: "100vh", width: "100vw" }}>
-      <MonacoEditor
-        height="100%"
-        width="100%"
-        theme="vs-dark"
-        defaultLanguage={language}
-        language={language}
-        value={code}
-        onMount={handleEditorDidMount}
-        options={{
-          fontSize: 14,
-          minimap: { enabled: true },
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          tabSize: 2,
-          wordWrap: "on",
-        }}
-      />
-    </div>
-  );
-};
+        // Apply remote edits seamlessly
+        model.pushEditOperations([], edits, () => null);
 
+        isApplyingRemoteChange.current = false;
+      },
+
+      // update remote cursor and selection highlights
+      updateRemoteCursor: ({
+        socketId,
+        username,
+        color,
+        cursor,
+        selection,
+      }) => {
+        if (!editorRef.current || !monacoRef.current) {
+          return;
+        }
+        const editor = editorRef.current;
+        const monaco = monacoRef.current;
+
+        //  inject dynamic CSS
+        const classPrefix = `user-cursor-${socketId}`;
+        injectCursorStyle(classPrefix, color, username);
+
+        const newDecorations = [];
+
+        // Draw vertical cursor bar at user's cursor position
+        if (cursor) {
+          newDecorations.push({
+            range: new monaco.Range(
+              cursor.lineNumber,
+              cursor.column,
+              cursor.lineNumber,
+              cursor.column,
+            ),
+            options: {
+              className: `${classPrefix}-bar`,
+              hoverMessage: { value: `**${username}**` },
+            },
+          });
+        }
+
+        // draw selection highlight if user highlighted text
+        if (
+          selection &&
+          (selection.startLineNumber !== selection.endLineNumber ||
+            selection.startColumn !== selection.endColumn)
+        ) {
+          newDecorations.push({
+            range: new monaco.Range(
+              selection.startLineNumber,
+              selection.startColumn,
+              selection.endLineNumber,
+              selection.endColumn,
+            ),
+            options: {
+              className: `${classPrefix}-selection`,
+            },
+          });
+        }
+
+        // apply new decorations and clear previous decorations
+        const oldDecorations = remoteDecorations.current.get(socketId) || [];
+        const updatedIds = editor.deltaDecorations(
+          oldDecorations,
+          newDecorations,
+        );
+        remoteDecorations.current.set(socketId, updatedIds);
+      },
+
+      // clean up cursor when a user leaves
+
+      removeRemoteCursor: (socketId) => {
+        if (!editorRef.current) return;
+        const oldDecorations = remoteDecorations.current.get(socketId) || [];
+        editorRef.current.deltaDecorations(oldDecorations, []);
+        remoteDecorations.current.delete(socketId);
+      },
+    }));
+
+    const handleEditorDidMount = (editor, monaco) => {
+      editorRef.current = editor;
+      monacoRef.current = monaco;
+      editor.focus();
+
+      editor.onDidChangeModelContent((event) => {
+        // Ignore changes generated by remote delta application
+        if (isApplyingRemoteChange.current) return;
+
+        if (onDeltaChange) {
+          onDeltaChange(event.changes, editor.getValue());
+        }
+      });
+
+      editor.onDidChangeCursorPosition((e) => {
+        const selection = editor.getSelection();
+        if (onCursorChange) {
+          onCursorChange(e.position, selection);
+        }
+      });
+    };
+
+    return (
+      <div style={{ height: "100vh", width: "100vw" }}>
+        <MonacoEditor
+          height="100%"
+          width="100%"
+          theme="vs-dark"
+          defaultLanguage={language}
+          language={language}
+          value={code}
+          onMount={handleEditorDidMount}
+          options={{
+            fontSize: 14,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            tabSize: 2,
+            wordWrap: "on",
+          }}
+        />
+      </div>
+    );
+  },
+);
+
+// Inject dynamic CSS rules for remote cursor vertical line and username badge tag
+function injectCursorStyle(classPrefix, color, username) {
+  const styleId = `cursor-style-${classPrefix}`;
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement("style");
+  style.id = styleId;
+  style.innerHTML = `
+    .${classPrefix}-bar {
+      border-left: 2px solid ${color} !important;
+      margin-left: -1px;
+      position: absolute !important;
+      z-index: 100 !important;
+    }
+    .${classPrefix}-bar::after {
+      content: "${username}";
+      position: absolute;
+      top: -18px;
+      left: 0;
+      background-color: ${color};
+      color: #000;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 1px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 101 !important;
+      box-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+    }
+    .${classPrefix}-selection {
+      background-color: ${color}44 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
 export default Editor;
