@@ -239,32 +239,36 @@ io.on('connection', async (socket) =>{
         
         // Fall back to passed username or socket property
         const leavingUsername = leavingUserObj?.username || data?.username || socket.username;
+        if(!leavingUsername) return
+
+        const remainingUsers = await removeUserFromRoom(roomId, socket.id)
+        
+        console.log(`[ROOM LEAVE]: ${leavingUsername} ${socket.id} left room ${roomId} `)
 
         socket.roomId = null
         socket.username = null
         socket.leave(roomId)
 
-
-        const remainingUsers = await removeUserFromRoom(roomId, socket.id)
+        // 4. Deduplicate remaining users by username for the UI badges
+        const uniqueUsers = Array.from(
+            new Map(remainingUsers.map(u => [u.username, u])).values()
+        );
         
-        console.log(`[ROOM LEAVE]: ${leavingUsername} ${socket.id} left room ${roomId} `)
-        if(!leavingUsername) return
+        // 5. Check if the username still exists in Redis under another socket
+        const isUserStillInRedis = remainingUsers.some((u) => u.username === leavingUsername);
 
-        // 3. Check if this username is STILL in the room under another socket (e.g. refreshed tab)
-        const isUserStillInRoom = remainingUsers.some((u) => u.username === leavingUsername);
-
-        // 4. If they ACTUALLY left, tell everyone else in the room WHO left
-        if (!isUserStillInRoom) {
-            socket.to(roomId).emit('user-left', {
+       
+        //  they ACTUALLY left, tell everyone else in the room WHO left
+        if (!isUserStillInRedis) {
+            io.to(roomId).emit('user-left', {
                 socketId: socket.id,
                 username: leavingUsername, // Explicitly send the leaving user's name!
-                users: remainingUsers
+                users: uniqueUsers
             });
         } else {
             // Just sync user badges if it was a refresh
-            socket.to(roomId).emit('user-joined', {
-                username: leavingUsername,
-                users: remainingUsers,
+            io.to(roomId).emit('user-list-update', {
+                users: uniqueUsers,
             })
         }
     }

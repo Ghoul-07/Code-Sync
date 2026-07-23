@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import {
   Routes,
@@ -18,8 +18,11 @@ function EditorPage() {
   const { roomId } = useParams();
   const location = useLocation();
 
-  const username =
-    location.state?.username || "User-" + Math.floor(Math.random() * 1000);
+  const username = useMemo(() => {
+    return (
+      location.state?.username || "User-" + Math.floor(Math.random() * 1000)
+    );
+  }, [location.state?.username]);
 
   const [code, setCode] = useState("");
   const [activeUsers, setActiveUsers] = useState([]);
@@ -52,10 +55,11 @@ function EditorPage() {
   };
 
   // Deduplicate active users array by socketId
-  const setUniqueUsers = (usersList) => {
+  const setUniqueUsers = (usersList = []) => {
+    const safeList = Array.isArray(usersList) ? usersList : [];
     setActiveUsers(() => {
       const seen = new Set();
-      return usersList.filter((u) => {
+      return safeList.filter((u) => {
         if (!u || !u.username || seen.has(u.username)) return false;
         seen.add(u.username);
         return true;
@@ -118,16 +122,21 @@ function EditorPage() {
       }
     });
 
+    // listening to update user in case of a restart
+    socket.on("user-list-update", ({ users }) => {
+      setUniqueUsers(users);
+    });
+
     socket.on("user-left", ({ socketId, username: leftUser, users }) => {
       setUniqueUsers(users);
-      if (editorRef.current) {
+      if (editorRef.current && socketId) {
         editorRef.current.removeRemoteCursor(socketId);
       }
-      console.log("[USER-LEFT: ", leftUser);
+      console.log("[USER-LEFT]: ", leftUser);
 
-      const isStillInRoom = users.some((u) => u.username === leftUser);
+      const isStillInRoom = users?.some((u) => u.username === leftUser);
 
-      if (!isStillInRoom && leftUser !== username) {
+      if (!isStillInRoom && leftUser && leftUser !== username) {
         toast(`${leftUser} left the room.`, {
           icon: "👋",
           style: { background: "#333", color: "#fff" },
@@ -162,6 +171,7 @@ function EditorPage() {
       socket.off("receive-language-change");
       socket.off("receive-execution-result");
       socket.off("join-error");
+      socket.off("user-list-update");
     };
   }, [roomId, username]);
 
