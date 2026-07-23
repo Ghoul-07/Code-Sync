@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
 import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
 
 function Home() {
   const navigate = useNavigate();
@@ -11,18 +12,18 @@ function Home() {
 
   const location = useLocation();
 
-  useEffect(() => {
-    if (location.state?.error) {
-      toast.error(location.state.error, {
-        id: "join-error-toast", // Prevents duplicate toasts
-        duration: 4000,
-        style: { background: "#333", color: "#fff" },
-      });
+  // useEffect(() => {
+  //   if (location.state?.error) {
+  //     toast.error(location.state.error, {
+  //       id: "join-error-toast", // Prevents duplicate toasts
+  //       duration: 4000,
+  //       style: { background: "#333", color: "#fff" },
+  //     });
 
-      // Silently clear history state so page refreshes don't re-trigger the toast
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state?.error]);
+  //     // Silently clear history state so page refreshes don't re-trigger the toast
+  //     window.history.replaceState({}, document.title);
+  //   }
+  // }, [location.state?.error]);
 
   const createNewRoom = (e) => {
     e.preventDefault();
@@ -33,17 +34,25 @@ function Home() {
     });
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!roomId.trim() || !username.trim()) {
       toast.error("ROOM ID & Username are required!", {
         style: { background: "#333", color: "#fff" },
       });
       return;
     }
-    // redirect to Editor route and pass username
-    navigate(`/editor/${roomId}`, {
-      state: { username },
-    });
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+      const res = await axios.get(
+        `${BACKEND_URL}/api/rooms/${roomId}/check-name?username=${username}`,
+      );
+      // redirect to Editor route and pass username
+      navigate(`/editor/${roomId}`, {
+        state: { username },
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Cannot join room");
+    }
   };
 
   const handleInputEnter = (e) => {

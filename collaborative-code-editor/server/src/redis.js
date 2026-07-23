@@ -77,15 +77,25 @@ export async function addUserToRoom(roomId, user){
  * Removes a student from a room when they disconnect
  */
 
-export async function removeUserFromRoom(roomId, socketId){
+export async function removeUserFromRoom(roomId, socketId, username){
     const room = await getRoom(roomId)
 
     if(!room) return []
 
     const existingUsers = Array.isArray(room.users) ? room.users : [];
 
-    // we should be removing the user with the matching socketId
-    const updatedUsers = existingUsers.filter((u) => u.socketId !== socketId )
+    // we should be removing the user with the matching socketId and username
+    const updatedUsers = existingUsers.filter((u) => {
+        // Check if socketId matches (only if socketId was provided)
+        const matchesSocket = socketId && u.socketId === socketId;
+
+        // Check if username matches (only if username was provided)
+        const matchesUsername = username && u.username?.toLowerCase() === username?.toLowerCase();
+
+        // Drop the user if EITHER condition matches!
+        // (Keep them only if NEITHER matched)
+        return !(matchesSocket || matchesUsername);
+    } )
 
     if(updatedUsers.length === 0){
         await pubClient.del(`room:${roomId}`)
