@@ -1,13 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 function Home() {
   const navigate = useNavigate();
 
   const [roomId, setRoomId] = useState("");
   const [username, setUsername] = useState("");
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.error) {
+      toast.error(location.state.error, {
+        id: "join-error-toast", // Prevents duplicate toasts
+        duration: 4000,
+        style: { background: "#333", color: "#fff" },
+      });
+
+      // Silently clear history state so page refreshes don't re-trigger the toast
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state?.error]);
 
   const createNewRoom = (e) => {
     e.preventDefault();

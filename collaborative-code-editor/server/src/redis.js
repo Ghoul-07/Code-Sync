@@ -29,14 +29,15 @@ pubClient.on("error", (err) => console.error("Redis Pub Error: ", err))
  */
 
 export async function getRoom(roomId){
-    const data = await pubClient.hgetall(`room:${roomId}`)
-    if(!data || Object.keys(data).length === 0) return null
+    const room = await pubClient.hgetall(`room:${roomId}`)
+    if(!room || Object.keys(room).length === 0) return null
 
     return {
         // if room has no code, fallback to default code once
 
-        code: data.code !== undefined ? data.code : "// Start collaborating here!\n",
-        users: data.users ? JSON.parse(data.users) : []
+        code: room.code !== undefined ? room.code : "",
+        language: room.language || 'javascript',
+        users: room.users ? JSON.parse(room.users) : []
     }
 }
 
@@ -48,19 +49,25 @@ export async function updateRoomCode(roomId, code){
     await pubClient.hset(`room:${roomId}`, "code", code)
 }
 
+export async function updateRoomLanguage(roomId, language){
+    await pubClient.hset(`room:${roomId}`, {language})
+}
+
 /* 
  add or update a user in a room
 */
 export async function addUserToRoom(roomId, user){
-    const room = (await getRoom(roomId)) || { code: "// Start collaborating here!\n", users: [] }
+    const room = (await getRoom(roomId))
+    
+    const existingUsers = (room && Array.isArray(room.users)) ? room.users : [];
 
     //filter our existing socket entries if present
-    const updatedUsers = room.users.filter((u) => u.socketId !== user.socketId  && u.username !== user.username)
+    const updatedUsers = existingUsers.filter((u) => u.socketId !== user.socketId  && u.username !== user.username)
+
     updatedUsers.push(user)
 
     await pubClient.hset(
         `room:${roomId}`,
-        "code", room.code,
         "users", JSON.stringify(updatedUsers)
     )
 
@@ -75,7 +82,10 @@ export async function removeUserFromRoom(roomId, socketId){
 
     if(!room) return []
 
-    const updatedUsers = room.users.filter((u) => u.socketId !== socketId)
+    const existingUsers = Array.isArray(room.users) ? room.users : [];
+
+    // we should be removing the user with the matching socketId
+    const updatedUsers = existingUsers.filter((u) => u.socketId !== socketId )
 
     if(updatedUsers.length === 0){
         await pubClient.del(`room:${roomId}`)

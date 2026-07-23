@@ -8,9 +8,11 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
+import axios from "axios";
 import Home from "./pages/Home";
 import Editor from "./components/Editor";
 import { socket } from "./socket";
+import Terminal from "./components/Terminal";
 
 function EditorPage() {
   const { roomId } = useParams();
@@ -25,6 +27,14 @@ function EditorPage() {
 
   const navigate = useNavigate();
 
+  // execution and language states
+  const [language, setLanguage] = useState("javascript");
+  const [output, setOutput] = useState("");
+  const [isError, setIsError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [executionTime, setExecutionTime] = useState(null);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
+
   const copyRoomId = async () => {
     try {
       await navigator.clipboard.writeText(roomId);
@@ -37,22 +47,53 @@ function EditorPage() {
   };
 
   const handleLeave = () => {
-    socket.emit("leave-room", { roomId });
+    socket.emit("leave-room", { roomId, username });
     navigate("/");
   };
 
-  useEffect(() => {
-    socket.emit("join-room", {
-      roomId,
-      username,
+  // Deduplicate active users array by socketId
+  const setUniqueUsers = (usersList) => {
+    setActiveUsers(() => {
+      const seen = new Set();
+      return usersList.filter((u) => {
+        if (!u || !u.username || seen.has(u.username)) return false;
+        seen.add(u.username);
+        return true;
+      });
     });
+  };
 
-    socket.on("room-init", ({ code: initialCode, users }) => {
-      setCode(initialCode);
-      setActiveUsers(users);
-      if (editorRef.current) {
-        editorRef.current.setEditorValue(initialCode);
-      }
+  useEffect(() => {
+    // RE-JOIN automatically when socket reconnects
+    const handleConnect = () => {
+      console.log("connected to socket server, joining Room: ", roomId);
+      socket.emit("join-room", {
+        roomId,
+        username,
+      });
+    };
+
+    // join room if already connected
+    if (socket.connected) {
+      handleConnect();
+    }
+    socket.on("connect", handleConnect);
+
+    socket.on(
+      "room-init",
+      ({ code: initialCode, language: initialLang, users }) => {
+        setCode(initialCode);
+        if (initialCode) setLanguage(initialLang);
+        setUniqueUsers(users);
+
+        if (editorRef.current) {
+          editorRef.current.setEditorValue(initialCode);
+        }
+      },
+    );
+
+    socket.on("join-error", (errorMessage) => {
+      navigate("/", { state: { error: errorMessage } });
     });
 
     // Receive deltas from other users and apply them to Monaco!
@@ -62,11 +103,13 @@ function EditorPage() {
       }
     });
 
-    socket.on("user-joined", ({ username, users }) => {
-      setActiveUsers(users);
-      toast.success(`${username} joined the room!`, {
-        style: { background: "#333", color: "#fff" },
-      });
+    socket.on("user-joined", ({ username: joinedUser, users }) => {
+      setUniqueUsers(users);
+      if (joinedUser !== username) {
+        toast.success(`${joinedUser} joined the room!`, {
+          style: { background: "#333", color: "#fff" },
+        });
+      }
     });
 
     socket.on("receive-cursor", (data) => {
@@ -75,23 +118,50 @@ function EditorPage() {
       }
     });
 
-    socket.on("user-left", ({ socketId, username, users }) => {
-      setActiveUsers(users);
+    socket.on("user-left", ({ socketId, username: leftUser, users }) => {
+      setUniqueUsers(users);
       if (editorRef.current) {
         editorRef.current.removeRemoteCursor(socketId);
       }
-      toast(`${username} left the room.`, {
-        icon: "👋",
-        style: { background: "#333", color: "#fff" },
-      });
+      console.log("[USER-LEFT: ", leftUser);
+
+      const isStillInRoom = users.some((u) => u.username === leftUser);
+
+      if (!isStillInRoom && leftUser !== username) {
+        toast(`${leftUser} left the room.`, {
+          icon: "👋",
+          style: { background: "#333", color: "#fff" },
+        });
+      }
     });
 
+    // listening for language sync
+    socket.on("receive-language-change", (newLang) => {
+      setLanguage(newLang);
+    });
+
+    // listening for remote execution result
+    socket.on(
+      "receive-execution-result",
+      ({ output, isError, executionTime }) => {
+        setOutput(output);
+        setIsError(isError);
+        setExecutionTime(executionTime);
+        setIsLoading(false);
+        setIsTerminalOpen(true);
+      },
+    );
+
     return () => {
+      socket.off("connect");
       socket.off("room-init");
       socket.off("receive-delta");
       socket.off("user-joined");
       socket.off("user-left");
       socket.off("receive-cursor");
+      socket.off("receive-language-change");
+      socket.off("receive-execution-result");
+      socket.off("join-error");
     };
   }, [roomId, username]);
 
@@ -101,20 +171,81 @@ function EditorPage() {
   };
 
   const handleCursorChange = (cursor, selection) => {
-    console.log("[CURSOR]: ", cursor);
     socket.emit("cursor-position", {
       roomId,
       cursor,
       selection,
     });
   };
+
+  const handleLanguageChange = (e) => {
+    const newLang = e.target.value;
+    setLanguage(newLang);
+    socket.emit("language-change", { roomId, language: newLang });
+  };
+
+  // run code request handler
+  const handleRunCode = async () => {
+    setIsLoading(true);
+    setIsTerminalOpen(true);
+
+    const BACKEND_URL =
+      import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+    // Notify other users in room that execution started
+    socket.emit("code-executed", {
+      roomId,
+      output: "⏳ Executing code in sandbox container...",
+      isError: false,
+      executionTime: null,
+    });
+
+    let resultOutput = "";
+    let hasError = false;
+    let timeTaken = 0;
+
+    try {
+      const startTime = performance.now();
+      const response = await axios.post(`${BACKEND_URL}/api/execute`, {
+        code,
+        language,
+      });
+      const endTime = performance.now();
+
+      const runData = response.data.run;
+      resultOutput =
+        runData.output || "Code executed successfully with no output";
+
+      hasError = runData.code !== 0;
+      timeTaken = Math.round(endTime - startTime);
+    } catch (err) {
+      console.error(
+        "AXIOS ERROR DETAILED:",
+        err.response || err.message || err,
+      );
+      hasError = true;
+      resultOutput = "Failed to connect to execution server.";
+      console.error("Execution Request Error:", err);
+    } finally {
+      setOutput(resultOutput);
+      setIsError(hasError);
+      setExecutionTime(timeTaken);
+      setIsLoading(false);
+
+      // broadcast to everyone in the room
+      socket.emit("code-executed", {
+        roomId,
+        output: resultOutput,
+        isError: hasError,
+        executionTime: timeTaken,
+      });
+    }
+  };
   return (
     <div
       className="app-container"
       style={{ display: "flex", flexDirection: "column", height: "100vh" }}
     >
-      <Toaster position="top-right" reverseOrder={false} />
-
       {/* Header */}
       <div
         style={{
@@ -165,6 +296,46 @@ function EditorPage() {
           </button>
         </div>
 
+        {/* Day 4: Language Dropdown & Run Button */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <select
+            value={language}
+            onChange={handleLanguageChange}
+            style={{
+              backgroundColor: "#333",
+              color: "#fff",
+              border: "1px solid #555",
+              borderRadius: "4px",
+              padding: "5px 10px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            <option value="javascript">JavaScript (Node.js)</option>
+            <option value="python">Python 3</option>
+            <option value="cpp">C++</option>
+            <option value="java">Java</option>
+          </select>
+
+          <button
+            onClick={handleRunCode}
+            disabled={isLoading}
+            style={{
+              backgroundColor: "#22c55e",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              padding: "5px 14px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            {isLoading ? "⏳ Running..." : "▶ Run Code"}
+          </button>
+        </div>
+
+        {/* Active Users */}
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <span style={{ fontSize: "12px", marginRight: "5px" }}>
             Active Users:
@@ -173,7 +344,7 @@ function EditorPage() {
             <span
               key={u.socketId}
               style={{
-                backgroundColor: "#007acc",
+                backgroundColor: u.color || "#007acc",
                 color: "#fff",
                 padding: "3px 8px",
                 borderRadius: "12px",
@@ -187,14 +358,23 @@ function EditorPage() {
         </div>
       </div>
 
-      {/* Editor Workspace  */}
-
-      <div style={{ flex: 1 }}>
+      {/* Editor & Terminal Workspace */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <Editor
           ref={editorRef}
           code={code}
+          language={language}
           onDeltaChange={handleDeltaChange}
           onCursorChange={handleCursorChange}
+        />
+
+        <Terminal
+          output={output}
+          isError={isError}
+          isLoading={isLoading}
+          executionTime={executionTime}
+          isOpen={isTerminalOpen}
+          setIsOpen={setIsTerminalOpen}
         />
       </div>
     </div>
@@ -203,11 +383,14 @@ function EditorPage() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/editor/:roomId" element={<EditorPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Toaster position="top-right" reverseOrder={false} />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/editor/:roomId" element={<EditorPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 export default App;
