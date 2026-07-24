@@ -1,0 +1,11 @@
+{
+  "ignore": [
+    "temp_*",
+    "*.js.py",
+    "*.py",
+    "*.exe",
+    "*.cpp",
+    "Main.class",
+    "Main.java"
+  ]
+}

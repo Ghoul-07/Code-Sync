@@ -5,6 +5,7 @@ import axios from "axios";
 import Editor from "../components/Editor";
 import { socket } from "../socket";
 import Terminal from "../components/Terminal";
+
 function EditorPage() {
   const { roomId } = useParams();
   const location = useLocation();
@@ -14,6 +15,24 @@ function EditorPage() {
       location.state?.username || "User-" + Math.floor(Math.random() * 1000)
     );
   }, [location.state?.username]);
+
+  // assign a consistent user color for Yjs cursor awareness
+  const userColor = useMemo(() => {
+    const colors = [
+      "#FF5733", // Coral Red
+      "#33FF57", // Bright Green
+      "#3357FF", // Royal Blue
+      "#F033FF", // Electric Pink
+      "#33FFF0", // Cyan
+      "#FFC300", // Golden Yellow
+    ];
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  }, [username]);
 
   const [code, setCode] = useState("");
   const [activeUsers, setActiveUsers] = useState([]);
@@ -78,21 +97,10 @@ function EditorPage() {
       "room-init",
       ({ code: initialCode, language: initialLang, users }) => {
         setCode(initialCode);
-        if (initialCode) setLanguage(initialLang);
+        if (initialLang) setLanguage(initialLang);
         setUniqueUsers(users);
-
-        if (editorRef.current) {
-          editorRef.current.setEditorValue(initialCode);
-        }
       },
     );
-
-    // Receive deltas from other users and apply them to Monaco!
-    socket.on("receive-delta", (changes) => {
-      if (editorRef.current) {
-        editorRef.current.applyRemoteDeltas(changes);
-      }
-    });
 
     socket.on("user-joined", ({ username: joinedUser, users }) => {
       setUniqueUsers(users);
@@ -103,22 +111,14 @@ function EditorPage() {
       }
     });
 
-    socket.on("receive-cursor", (data) => {
-      if (editorRef.current) {
-        editorRef.current.updateRemoteCursor(data);
-      }
-    });
-
     // listening to update user in case of a restart
     socket.on("user-list-update", ({ users }) => {
       setUniqueUsers(users);
     });
 
-    socket.on("user-left", ({ socketId, username: leftUser, users }) => {
+    socket.on("user-left", ({ username: leftUser, users }) => {
       setUniqueUsers(users);
-      if (editorRef.current && socketId) {
-        editorRef.current.removeRemoteCursor(socketId);
-      }
+
       console.log("[USER-LEFT]: ", leftUser);
 
       const isStillInRoom = users?.some((u) => u.username === leftUser);
@@ -151,28 +151,13 @@ function EditorPage() {
     return () => {
       socket.off("connect");
       socket.off("room-init");
-      socket.off("receive-delta");
       socket.off("user-joined");
       socket.off("user-left");
-      socket.off("receive-cursor");
       socket.off("receive-language-change");
       socket.off("receive-execution-result");
       socket.off("user-list-update");
     };
   }, [roomId, username]);
-
-  const handleDeltaChange = (changes, fullCode) => {
-    setCode(fullCode);
-    socket.emit("code-delta", { roomId, changes, fullCode });
-  };
-
-  const handleCursorChange = (cursor, selection) => {
-    socket.emit("cursor-position", {
-      roomId,
-      cursor,
-      selection,
-    });
-  };
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
@@ -222,7 +207,6 @@ function EditorPage() {
       );
       hasError = true;
       resultOutput = "Failed to connect to execution server.";
-      console.error("Execution Request Error:", err);
     } finally {
       setOutput(resultOutput);
       setIsError(hasError);
@@ -359,10 +343,12 @@ function EditorPage() {
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <Editor
           ref={editorRef}
-          code={code}
+          roomId={roomId}
+          username={username}
           language={language}
-          onDeltaChange={handleDeltaChange}
-          onCursorChange={handleCursorChange}
+          color={userColor}
+          serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
+          onCodeChange={(newCode) => setCode(newCode)}
         />
 
         <Terminal
