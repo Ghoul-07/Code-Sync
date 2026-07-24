@@ -1,11 +1,5 @@
-import React, {
-  useRef,
-  useEffect,
-  useImperativeHandle,
-  forwardRef,
-} from "react";
+import React, { useRef, useImperativeHandle, forwardRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
-import { socket } from "../socket";
 
 const Editor = forwardRef(
   ({ code, onDeltaChange, onCursorChange, language = "javascript" }, ref) => {
@@ -18,6 +12,8 @@ const Editor = forwardRef(
 
     // Expose a method to apply remote changes directly to Monaco
     useImperativeHandle(ref, () => ({
+      getValue: () => editorRef?.current?.getValue() || "",
+
       setEditorValue: (newCode) => {
         if (!editorRef.current) return;
         isApplyingRemoteChange.current = true;

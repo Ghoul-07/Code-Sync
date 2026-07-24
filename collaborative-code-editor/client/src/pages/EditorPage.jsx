@@ -188,6 +188,12 @@ function EditorPage() {
     const BACKEND_URL =
       import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
+    // live code from monaco
+    const currentCode = editorRef?.current?.getValue() || "";
+
+    // sync user states
+    setCode(currentCode);
+
     // Notify other users in room that execution started
     socket.emit("code-executed", {
       roomId,
@@ -201,19 +207,14 @@ function EditorPage() {
     let timeTaken = 0;
 
     try {
-      const startTime = performance.now();
       const response = await axios.post(`${BACKEND_URL}/api/execute`, {
-        code,
+        code: currentCode,
         language,
       });
-      const endTime = performance.now();
 
-      const runData = response.data.run;
-      resultOutput =
-        runData.output || "Code executed successfully with no output";
-
-      hasError = runData.code !== 0;
-      timeTaken = Math.round(endTime - startTime);
+      resultOutput = response.data.output;
+      hasError = response.data.isError;
+      timeTaken = response.data.executionTime;
     } catch (err) {
       console.error(
         "AXIOS ERROR DETAILED:",
