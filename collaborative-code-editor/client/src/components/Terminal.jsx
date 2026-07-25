@@ -11,19 +11,16 @@ const Terminal = ({
   return (
     <div
       style={{
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
+        width: "100%",
         height: isOpen ? "180px" : "32px",
         backgroundColor: "#1e1e1e",
         borderTop: "1px solid #333",
         color: "#fff",
         fontFamily: "'Fira Code', 'Courier New', monospace",
         transition: "height 0.2s ease-in-out",
-        zIndex: 100,
         display: "flex",
         flexDirection: "column",
+        flexShrink: 0,
       }}
     >
       {/* Terminal Header Bar */}

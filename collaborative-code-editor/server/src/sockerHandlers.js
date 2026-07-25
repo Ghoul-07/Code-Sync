@@ -1,5 +1,4 @@
-import { getRoom, updateRoomCode, removeUserFromRoom, addUserToRoom, updateRoomLanguage } from './redis.js'
-
+import { getRoom, updateRoomCode, removeUserFromRoom, addUserToRoom, updateRoomLanguage , addChatMessage, getRoomChats} from './redis.js'
 
 const USER_COLORS = [
   "#FF5733", // Coral Red
@@ -11,28 +10,18 @@ const USER_COLORS = [
 ];
 
 
-const getHashColor = (username) =>{
-    let hash = 0
-    for(let i = 0; i < username.length; i++){
-        hash  = username.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    const index  = Math.abs(hash) % USER_COLORS.length
-    return USER_COLORS[index]
-}
-
 export const registerSocketHandlers = (io, socket) =>{
     console.log(`[SOCKET CONNECTED]: ${socket.id}`)
 
     // ----- JOIN-ROOM -----
 
-    socket.on('join-room',  async ({roomId, username}) =>{
-        
+    socket.on('join-room',  async ({roomId, username, preferredColor}) =>{
+       
         let room = await getRoom(roomId)
         const existingUsers = room ? room.users : []
 
         const existingUser = existingUsers.find((u) => u.username === username);
 
-        
         if(existingUser && existingUser.socketId !== socket.id){
             // check if that socket id is still actively connected to socket.io
           
@@ -51,33 +40,36 @@ export const registerSocketHandlers = (io, socket) =>{
         // either a new join or refresh
         socket.join(roomId)
 
-        // color based on how many users are in the room
-        const userColor = getHashColor(username)
+        const usedColors = new Set(existingUsers.map((u) => u.color))
+        const userColor = preferredColor || USER_COLORS.find((c) => !usedColors.has(c))
 
         socket.username = username
         socket.roomId = roomId        
         socket.color = userColor
 
-        // save user to redis store
-        const updatedUsers = await addUserToRoom(roomId, {
+         // save user to redis store
+        const { updatedUsers } = await addUserToRoom(roomId, {
             socketId:socket.id,
             username,
             color:userColor
-
         })
 
+        console.log(`[ROOM-JOIN]: ${username} joined room ${roomId}`)
+    
         
-        console.log(`[ROOM JOIN]: ${username} (${socket.id} joined room ${roomId})`)
+        const chatHistory = await getRoomChats(roomId)        // fetch chats from redis
 
         // send current document state and full user list to the joinig user
         socket.emit('room-init', {
             code:room?.code || "",
             language:room?.language || 'javascript',
-            users: updatedUsers
+            users: updatedUsers,
+            userColor,
+            chatHistory
         })
-
+       
         // notify other users in the room
-        socket.to(roomId).emit('user-joined', {username, socketId: socket.id, users: updatedUsers})
+        socket.to(roomId).emit('user-joined', {username, socketId: socket.id, users: updatedUsers, color:userColor})
     })
 
     // ----- CODE-DELTA -----
@@ -92,7 +84,7 @@ export const registerSocketHandlers = (io, socket) =>{
     // ----- CURSOR-POSITION -----
     socket.on('cursor-position', async ({roomId, cursor, selection}) =>{
         const username = socket.username || 'Anonymous'
-        const color = socket.color || '$FF5733'
+        const color = socket.color || '#FF5733'
 
         // BROADCAST TO ALL USERS in same room
         socket.to(roomId).emit('receive-cursor', {
@@ -117,6 +109,25 @@ export const registerSocketHandlers = (io, socket) =>{
             isError,
             executionTime
         })
+    })
+
+    // ----- SEND MESSAGES -----
+    socket.on('send-message', async ({roomId, message})=>{
+        const username = socket.username || 'Anyonymous'
+        const userColor = socket.color || '#007acc'
+
+        const messageObj = {
+            id: Date.now() + Math.random(),
+            username,
+            userColor,
+            message,
+            time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+        }
+
+        // save to redis
+        await addChatMessage(roomId, messageObj)
+
+        io.to(roomId).emit('receive-message', messageObj)
     })
 
     // ----- WEB_RTC OFFER AND ANSWER -----

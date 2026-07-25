@@ -19,23 +19,9 @@ function EditorPage() {
     );
   }, [location.state?.username]);
 
-  // assign a consistent user color for Yjs cursor awareness
-  const userColor = useMemo(() => {
-    const colors = [
-      "#FF5733", // Coral Red
-      "#33FF57", // Bright Green
-      "#3357FF", // Royal Blue
-      "#F033FF", // Electric Pink
-      "#33FFF0", // Cyan
-      "#FFC300", // Golden Yellow
-    ];
-    let hash = 0;
-    for (let i = 0; i < username.length; i++) {
-      hash = username.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  }, [username]);
+  const [userColor, setUserColor] = useState(() => {
+    return sessionStorage.getItem(`room_color_${roomId}`) || null;
+  });
 
   const [code, setCode] = useState("");
   const [activeUsers, setActiveUsers] = useState([]);
@@ -54,6 +40,9 @@ function EditorPage() {
   // webRTC mesh voice chat hook
   const { peers, isMuted, toggleMute, isSelfSpeaking, speakingUsers } =
     useVoiceChat(socket, roomId, username);
+
+  // Store chat messages
+  const [messages, setMessages] = useState([]);
 
   const copyRoomId = async () => {
     try {
@@ -85,12 +74,14 @@ function EditorPage() {
   };
 
   useEffect(() => {
+    if (!roomId || !username) return;
     // RE-JOIN automatically when socket reconnects
     const handleConnect = () => {
-      console.log("connected to socket server, joining Room: ", roomId);
+      const preferredColor = sessionStorage.getItem(`room_color_${roomId}`);
       socket.emit("join-room", {
         roomId,
         username,
+        preferredColor,
       });
     };
 
@@ -102,10 +93,23 @@ function EditorPage() {
 
     socket.on(
       "room-init",
-      ({ code: initialCode, language: initialLang, users }) => {
+      ({
+        code: initialCode,
+        language: initialLang,
+        users,
+        chatHistory,
+        userColor: assignedColor,
+      }) => {
         setCode(initialCode);
         if (initialLang) setLanguage(initialLang);
-        setUniqueUsers(users);
+        if (users) setUniqueUsers(users);
+        if (chatHistory && Array.isArray(chatHistory)) {
+          setMessages(chatHistory);
+        }
+        if (assignedColor) {
+          setUserColor(assignedColor);
+          sessionStorage.setItem(`room_color_${roomId}`, assignedColor);
+        }
       },
     );
 
@@ -125,8 +129,6 @@ function EditorPage() {
 
     socket.on("user-left", ({ username: leftUser, users }) => {
       setUniqueUsers(users);
-
-      console.log("[USER-LEFT]: ", leftUser);
 
       const isStillInRoom = users?.some((u) => u.username === leftUser);
 
@@ -155,6 +157,10 @@ function EditorPage() {
       },
     );
 
+    socket.on("receive-message", (newMessage) => {
+      setMessages((prev) => [...prev, newMessage]);
+    });
+
     return () => {
       socket.off("connect");
       socket.off("room-init");
@@ -163,6 +169,7 @@ function EditorPage() {
       socket.off("receive-language-change");
       socket.off("receive-execution-result");
       socket.off("user-list-update");
+      socket.off("receive-message");
     };
   }, [roomId, username]);
 
@@ -232,7 +239,12 @@ function EditorPage() {
   return (
     <div
       className="app-container"
-      style={{ display: "flex", flexDirection: "column", height: "100vh" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        overflow: "hidden",
+      }}
     >
       {/* Header */}
       <div
@@ -342,6 +354,9 @@ function EditorPage() {
           toggleMute={toggleMute}
           isSelfSpeaking={isSelfSpeaking}
           speakingUsers={speakingUsers}
+          messages={messages}
+          socket={socket}
+          roomId={roomId}
         />
 
         {/* Editor and Terminal Workspace */}
@@ -352,17 +367,28 @@ function EditorPage() {
             flexDirection: "column",
             position: "relative",
             overflow: "hidden",
+            height: "100%",
           }}
         >
-          <Editor
-            ref={editorRef}
-            roomId={roomId}
-            username={username}
-            language={language}
-            color={userColor}
-            serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
-            onCodeChange={(newCode) => setCode(newCode)}
-          />
+          {/* Editor Wrapper */}
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              position: "relative",
+              width: "100%",
+            }}
+          >
+            <Editor
+              ref={editorRef}
+              roomId={roomId}
+              username={username}
+              language={language}
+              color={userColor}
+              serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
+              onCodeChange={(newCode) => setCode(newCode)}
+            />
+          </div>
 
           <Terminal
             output={output}
@@ -376,9 +402,9 @@ function EditorPage() {
       </div>
 
       {/* Invisible Audio Elements for peer voice chat */}
-      {peers.map(({ socketId, peer }) => {
-        <AudioPlayer key={socketId} peer={peer} />;
-      })}
+      {peers.map(({ socketId, peer }) => (
+        <AudioPlayer key={socketId} peer={peer} />
+      ))}
     </div>
   );
 }

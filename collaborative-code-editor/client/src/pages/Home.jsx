@@ -44,7 +44,7 @@ function Home() {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
       const res = await axios.get(
-        `${BACKEND_URL}/api/rooms/${roomId}/check-name?username=${username}`,
+        `${BACKEND_URL}/api/rooms/${roomId}/check-access?username=${username}`,
       );
       // redirect to Editor route and pass username
       navigate(`/editor/${roomId}`, {

@@ -309,13 +309,21 @@ const Editor = forwardRef(
     };
 
     return (
-      <div style={{ height: "100%", width: "100%", position: "relative" }}>
+      <div
+        style={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          backgroundColor: "#1e1e1e",
+          overflow: "hidden",
+        }}
+      >
         {/* Connection Status Badge */}
         <div
           style={{
             position: "absolute",
             top: "8px",
-            right: "20px",
+            right: "35px",
             zIndex: 10,
             padding: "3px 10px",
             borderRadius: "12px",
@@ -378,6 +386,14 @@ const Editor = forwardRef(
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
+            overviewRulerLanes: 0, // Disables vertical overview ruler line
+            hideCursorInOverviewRuler: true, // Cleans up right edge gutter
+            scrollbar: {
+              verticalScrollbarSize: 10, // Slimmer vertical scrollbar
+              horizontalScrollbarSize: 10,
+            },
+            padding: { bottom: 40 },
+            cursorSurroundingLines: 3,
           }}
         />
       </div>

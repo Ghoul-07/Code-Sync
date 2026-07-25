@@ -24,6 +24,8 @@ pubClient.on("error", (err) => console.error("Redis Pub Error: ", err))
 // REDIS ROOM STATE HELPERS
 // ==========================================
 
+
+
 /**
  * Get room data from Redis
  */
@@ -61,17 +63,26 @@ export async function addUserToRoom(roomId, user){
     
     const existingUsers = (room && Array.isArray(room.users)) ? room.users : [];
 
-    //filter our existing socket entries if present
-    const updatedUsers = existingUsers.filter((u) => u.socketId !== user.socketId  && u.username !== user.username)
+    // filter our existing socket entries if present
+    // const updatedUsers = existingUsers.filter((u) => u.socketId !== user.socketId  && u.username?.toLowerCase() !== user.username?.toLowerCase())
 
+    const updatedUsers = existingUsers.filter((u) => {
+        if (!u) return false;
+
+        if (user.socketId && u.socketId === user.socketId) return false;
+        if (user.username && u.username === user.username) return false;
+        return true;
+    });
+
+    
     updatedUsers.push(user)
-
+    
     await pubClient.hset(
         `room:${roomId}`,
         "users", JSON.stringify(updatedUsers)
     )
 
-    return updatedUsers
+    return {updatedUsers}
 }
 /**
  * Removes a student from a room when they disconnect
@@ -90,19 +101,60 @@ export async function removeUserFromRoom(roomId, socketId, username){
         const matchesSocket = socketId && u.socketId === socketId;
 
         // Check if username matches (only if username was provided)
-        const matchesUsername = username && u.username?.toLowerCase() === username?.toLowerCase();
+        const matchesUsername = username && u.username === username;
 
         // Drop the user if EITHER condition matches!
         // (Keep them only if NEITHER matched)
         return !(matchesSocket || matchesUsername);
+        
     } )
 
     if(updatedUsers.length === 0){
         await pubClient.del(`room:${roomId}`)
     }
+
     else{
         await pubClient.hset(`room:${roomId}`, "users", JSON.stringify(updatedUsers))
     }
     return updatedUsers
 }
 
+
+/*
+    Save a chat message to redis room chat history
+*/
+export async function addChatMessage(roomId, messageObj){
+    try{
+        const key = `room:${roomId}:chats`
+        const res = await pubClient.rpush(key, JSON.stringify(messageObj))
+
+        // keep only last 100 messages to control memory
+        await pubClient.ltrim(key, -100, -1)
+
+        // auto expire chat history after 24 hours
+        await pubClient.expire(key, 86400)
+        
+    }catch(err){
+        console.log("Redis addChatMessage Error: ", err)
+    }
+}
+
+/*
+    Get all chat messages for a room
+*/
+
+export async function getRoomChats(roomId) {
+    try{
+
+        const key = `room:${roomId}:chats`
+
+        const rawChats = await pubClient.lrange(key, 0, -1)
+       
+
+        if(!rawChats || rawChats.length === 0) return []
+
+        return rawChats.map((msg) => JSON.parse(msg))
+    } catch(err){
+        console.log("Redis getRoomChats history", err)
+    }
+}
