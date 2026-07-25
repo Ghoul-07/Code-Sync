@@ -11,17 +11,17 @@ const Terminal = ({
   return (
     <div
       style={{
-        position: "fixed",
+        position: "absolute",
         bottom: 0,
         left: 0,
         right: 0,
-        height: isOpen ? "220px" : "36px",
+        height: isOpen ? "180px" : "32px",
         backgroundColor: "#1e1e1e",
         borderTop: "1px solid #333",
         color: "#fff",
         fontFamily: "'Fira Code', 'Courier New', monospace",
         transition: "height 0.2s ease-in-out",
-        zIndex: 1000,
+        zIndex: 100,
         display: "flex",
         flexDirection: "column",
       }}
@@ -36,6 +36,9 @@ const Terminal = ({
           backgroundColor: "#252526",
           borderBottom: isOpen ? "1px solid #333" : "none",
           userSelect: "none",
+          cursor: "pointer",
+          fontSize: "12px",
+          color: "#ccc",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

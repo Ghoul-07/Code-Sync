@@ -5,6 +5,9 @@ import axios from "axios";
 import Editor from "../components/Editor";
 import { socket } from "../socket";
 import Terminal from "../components/Terminal";
+import { useVoiceChat } from "../hooks/useVoiceChat";
+import { AudioPlayer } from "../components/AudioPlayer";
+import Sidebar from "../components/Sidebar";
 
 function EditorPage() {
   const { roomId } = useParams();
@@ -47,6 +50,10 @@ function EditorPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [executionTime, setExecutionTime] = useState(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
+
+  // webRTC mesh voice chat hook
+  const { peers, isMuted, toggleMute, isSelfSpeaking, speakingUsers } =
+    useVoiceChat(socket, roomId, username);
 
   const copyRoomId = async () => {
     try {
@@ -257,7 +264,7 @@ function EditorPage() {
               fontSize: "12px",
             }}
           >
-            📋 Copy ID
+            📋 Copy ROOM ID
           </button>
 
           <button
@@ -277,7 +284,7 @@ function EditorPage() {
           </button>
         </div>
 
-        {/* Day 4: Language Dropdown & Run Button */}
+        {/* Language Dropdown & Run Button */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <select
             value={language}
@@ -315,51 +322,63 @@ function EditorPage() {
             {isLoading ? "⏳ Running..." : "▶ Run Code"}
           </button>
         </div>
+      </div>
 
-        {/* Active Users */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <span style={{ fontSize: "12px", marginRight: "5px" }}>
-            Active Users:
-          </span>
-          {activeUsers.map((u) => (
-            <span
-              key={u.socketId}
-              style={{
-                backgroundColor: u.color || "#007acc",
-                color: "#fff",
-                padding: "3px 8px",
-                borderRadius: "12px",
-                fontSize: "12px",
-                fontWeight: "500",
-              }}
-            >
-              👤 {u.username}
-            </span>
-          ))}
+      {/* Main Workspace area (Sidebar + Editor & Terminal )*/}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {/* Left Sidebar*/}
+        <Sidebar
+          activeUsers={activeUsers}
+          username={username}
+          userColor={userColor}
+          isMuted={isMuted}
+          toggleMute={toggleMute}
+          isSelfSpeaking={isSelfSpeaking}
+          speakingUsers={speakingUsers}
+        />
+
+        {/* Editor and Terminal Workspace */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <Editor
+            ref={editorRef}
+            roomId={roomId}
+            username={username}
+            language={language}
+            color={userColor}
+            serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
+            onCodeChange={(newCode) => setCode(newCode)}
+          />
+
+          <Terminal
+            output={output}
+            isError={isError}
+            isLoading={isLoading}
+            executionTime={executionTime}
+            isOpen={isTerminalOpen}
+            setIsOpen={setIsTerminalOpen}
+          />
         </div>
       </div>
 
-      {/* Editor & Terminal Workspace */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <Editor
-          ref={editorRef}
-          roomId={roomId}
-          username={username}
-          language={language}
-          color={userColor}
-          serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
-          onCodeChange={(newCode) => setCode(newCode)}
-        />
-
-        <Terminal
-          output={output}
-          isError={isError}
-          isLoading={isLoading}
-          executionTime={executionTime}
-          isOpen={isTerminalOpen}
-          setIsOpen={setIsTerminalOpen}
-        />
-      </div>
+      {/* Invisible Audio Elements for peer voice chat */}
+      {peers.map(({ socketId, peer }) => {
+        <AudioPlayer key={socketId} peer={peer} />;
+      })}
     </div>
   );
 }

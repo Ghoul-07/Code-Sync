@@ -119,6 +119,40 @@ export const registerSocketHandlers = (io, socket) =>{
         })
     })
 
+    // ----- WEB_RTC OFFER AND ANSWER -----
+
+    // 1. Relay offer from Initiator to target peer
+    socket.on('webrtc-offer', ({targetSocketId, offer})=>{
+        io.to(targetSocketId).emit('webrtc-offer', {
+            fromSocketId: socket.id,
+            offer
+        })
+    })
+
+    // 2. Relay answer from receiver back to Initiator
+    socket.on('webrtc-answer', ({targetSocketId, answer})=>{
+        io.to(targetSocketId).emit('webrtc-answer',{
+            fromSocketId: socket.id,
+            answer
+        })
+    })
+
+    // 3. Relay ICE Candidates between Pairs
+    socket.on('webrtc-ice-candidate', ({targetSocketId, candidate})=>{
+        io.to(targetSocketId).emit('webrtc-ice-candidate',{
+            fromSocketId: socket.id,
+            candidate
+        })
+    })
+
+    // ----- ACTIVE SPEAKER EVENT -----
+    socket.on('speaking-change', ({roomId, isSpeaking}) =>{
+        socket.to(roomId).emit('user-speaking-changed', {
+            socketId: socket.id,
+            isSpeaking
+        })
+    })
+
     // ----- LEAVE/DISCONNECT HANDLERS -----
     const handleUserLeave = async (data = {})=>{
         const roomId = socket.roomId || data?.roomId
