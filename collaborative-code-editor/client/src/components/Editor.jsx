@@ -19,6 +19,7 @@ const Editor = forwardRef(
       language = "javascript",
       serverUrl = "ws://localhost:5000",
       onCodeChange,
+      onTerminalSync,
     },
     ref,
   ) => {
@@ -33,6 +34,9 @@ const Editor = forwardRef(
     const remoteDecorations = useRef(new Map());
 
     useImperativeHandle(ref, () => ({
+      editor: editorRef.current,
+      monaco: monacoRef.current,
+
       getValue: () =>
         ytextRef.current?.toString() || editorRef?.current?.getValue() || "",
 
@@ -41,6 +45,16 @@ const Editor = forwardRef(
         ydocRef.current.transact(() => {
           ytextRef.current.delete(0, ytextRef.current.length);
           ytextRef.current.insert(0, newCode);
+        });
+      },
+
+      setTerminalState: (output, isError, executionTime) => {
+        if (!ydocRef.current) return;
+        const yterminal = ydocRef.current.getMap("terminal");
+        ydocRef.current.transact(() => {
+          yterminal.set("output", output);
+          yterminal.set("isError", isError);
+          yterminal.set("executionTime", executionTime);
         });
       },
     }));
@@ -143,6 +157,20 @@ const Editor = forwardRef(
       const ytext = ydoc.getText("monaco");
       ytextRef.current = ytext;
 
+      // shared map for terminal state
+      const yterminal = ydoc.getMap("terminal");
+
+      yterminal.observe(() => {
+        const terminalData = yterminal.toJSON();
+        if (
+          terminalData &&
+          terminalData.output !== undefined &&
+          onTerminalSync
+        ) {
+          onTerminalSync(terminalData);
+        }
+      });
+
       // Track Network Status
       const handleStatus = (event) => {
         if (!navigator.onLine) {
@@ -158,6 +186,19 @@ const Editor = forwardRef(
         if (isSynced) {
           setStatus("connected");
           setupBinding(); // Re-binds Monaco AND cursor awareness listeners
+
+          // hydrate terminal on rejoin/refresh
+          if (ydoc.current) {
+            const yterminal = ydoc.current.getMap("terminal");
+            const terminalData = yterminal.toJSON();
+            if (
+              terminalData &&
+              terminalData.output !== undefined &&
+              onTerminalSync
+            ) {
+              onTerminalSync(terminalData);
+            }
+          }
         }
       };
       provider.on("sync", handleSync);
@@ -212,6 +253,14 @@ const Editor = forwardRef(
       }
 
       setupBinding();
+
+      //  Clear execution markers locally as soon as content changes!
+      editor.onDidChangeModelContent(() => {
+        const model = editor.getModel();
+        if (model) {
+          monaco.editor.setModelMarkers(model, "execution-error", []);
+        }
+      });
 
       // Listen to code changes for parent callback
       if (ytextRef.current) {

@@ -44,6 +44,40 @@ function EditorPage() {
   // Store chat messages
   const [messages, setMessages] = useState([]);
 
+  // helper function to safely set/clear Monaco execution  markers
+  const updateExecutionMarkers = (errorMessage = "", isErr = false) => {
+    const editorInstance = editorRef.current?.editor;
+    const monacoInstance = editorRef.current?.monaco || window.monaco;
+
+    if (!editorInstance || !monacoInstance) return;
+
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    if (isErr && errorMessage) {
+      const match =
+        errorMessage.match(/:(\d+)(?::\d+)?/) ||
+        errorMessage.match(/line (\d+)/i);
+
+      const lineNumber = match ? parseInt(match[1], 10) : 1;
+      const maxCol = model.getLineMaxColumn(lineNumber) || 100;
+
+      monacoInstance.editor.setModelMarkers(model, "execution-error", [
+        {
+          startLineNumber: lineNumber,
+          startColumn: 1,
+          endLineNumber: lineNumber,
+          endColumn: maxCol,
+          message: errorMessage,
+          severity: monacoInstance.MarkerSeverity.Error,
+        },
+      ]);
+    } else {
+      // clear execution markers if code executed successfully or user is typing
+      monacoInstance.editor.setModelMarkers(model, "execution-error", []);
+    }
+  };
+
   const copyRoomId = async () => {
     try {
       await navigator.clipboard.writeText(roomId);
@@ -226,6 +260,13 @@ function EditorPage() {
       setIsError(hasError);
       setExecutionTime(timeTaken);
       setIsLoading(false);
+
+      if (editorRef.current?.setTerminalState) {
+        editorRef.current.setTerminalState(resultOutput, hasError, timeTaken);
+      }
+
+      // highlight error lines in monaco if runtime failed
+      updateExecutionMarkers(resultOutput, hasError);
 
       // broadcast to everyone in the room
       socket.emit("code-executed", {
@@ -434,7 +475,20 @@ function EditorPage() {
               language={language}
               color={userColor}
               serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
-              onCodeChange={(newCode) => setCode(newCode)}
+              onCodeChange={(newCode) => {
+                setCode(newCode);
+                updateExecutionMarkers("", false);
+              }}
+              onTerminalSync={({ output, isError, executionTime }) => {
+                setOutput(output || "");
+                setIsError(!!isError);
+                setExecutionTime(executionTime || null);
+                setIsTerminalOpen(true);
+
+                setTimeout(() => {
+                  updateExecutionMarkers(output || "", !!isError);
+                }, 100);
+              }}
             />
           </div>
 
