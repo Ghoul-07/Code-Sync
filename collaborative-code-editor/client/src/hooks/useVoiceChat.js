@@ -18,6 +18,7 @@ export function useVoiceChat(socket, roomId, username) {
   // socketIds currently speaking
   const [speakingUsers, setSpeakingUsers] = useState(new Set());
   const [isSelfSpeaking, setIsSelfSpeaking] = useState(false);
+  const isSelfSpeakingRef = useRef(null)
 
   const peersRef = useRef(new Map()); // map <SocketId, peerInstance>
   const localStreamRef = useRef(null);
@@ -61,7 +62,15 @@ export function useVoiceChat(socket, roomId, username) {
       });
     });
 
-    // feed incoming offer into this new peer instance
+   
+    // when joining user gets audio stream, ask if anyone is speaking
+    peer.on('stream', ()=>{
+      setTimeout(()=>{
+        socket.emit('check-speaking-status', {roomId})
+      }, 100)
+    })
+
+     // feed incoming offer into this new peer instance
     peer.signal(incomingOffer);
 
     return peer;
@@ -71,9 +80,12 @@ export function useVoiceChat(socket, roomId, username) {
   useEffect(() => {
     if (!socket || !roomId) return;
 
+    let localStream = null
+
     navigator.mediaDevices
       .getUserMedia({ audio: true, video: false })
       .then((stream) => {
+        localStream = stream
         localStreamRef.current = stream;
 
         // AUDIO VOLUME ANALYZER (ACTIVE SPEAKER DETECTION)
@@ -118,6 +130,8 @@ export function useVoiceChat(socket, roomId, username) {
             const rms = Math.sqrt(sumSquare / timeData.length);
             const isSpeakingNow = rms > 0.012;
 
+            isSelfSpeakingRef.current = isSpeakingNow
+
             if (isSpeakingNow) {
               if (!wasSpeaking) {
                 wasSpeaking = true;
@@ -150,7 +164,28 @@ export function useVoiceChat(socket, roomId, username) {
           console.error("Audio analyzer setup failed: ", err);
         }
 
+        //  Respond when a joining user asks "is anyone currently speaking?"
+        socket.on("check-speaking-status", () => {
+          if (isSelfSpeakingRef.current) {
+            socket.emit("speaking-change", { roomId, isSpeaking: true });
+          }
+        });
+
         // ------ WEBRTC SOCKET LISTENERS -----
+
+        // Listen for initial room state to catch already-speaking users on join
+        const handleRoomInit = ({ activeSpeakers }) => {
+          if (activeSpeakers && Array.isArray(activeSpeakers)) {
+            setSpeakingUsers((prev) => {
+              const next = new Set(prev);
+              activeSpeakers.forEach((id) => next.add(id));
+              return next;
+            });
+          }
+        };
+
+        socket.on("room-init", handleRoomInit);
+
 
         // 1. Existing users sees a new user join -> Initiates WebRTC Offer
         socket.on("user-joined", ({ socketId: newUserSocketId }) => {
@@ -160,8 +195,10 @@ export function useVoiceChat(socket, roomId, username) {
           peersRef.current.set(newUserSocketId, peer);
 
           setPeers((prev) => [...prev, { socketId: newUserSocketId, peer }]);
+          
         });
 
+        
         // 2. New User receives offer from existing user => creates answer
         socket.on("webrtc-offer", ({ fromSocketId, offer }) => {
           const peer = addPeer(offer, fromSocketId, stream);
@@ -239,6 +276,8 @@ export function useVoiceChat(socket, roomId, username) {
       socket.off("webrtc-answer");
       socket.off("user-left");
       socket.off("user-speaking-changed");
+      socket.off('check-speaking-status')
+      socket.off('room-init')
     };
   }, [socket, roomId]);
 

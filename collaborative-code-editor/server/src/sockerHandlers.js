@@ -9,6 +9,7 @@ const USER_COLORS = [
   "#FFC300"  // Golden Yellow
 ];
 
+const activeSpeakers = new Map()  // <roomId, Set<socketId>>
 
 export const registerSocketHandlers = (io, socket) =>{
     console.log(`[SOCKET CONNECTED]: ${socket.id}`)
@@ -40,6 +41,10 @@ export const registerSocketHandlers = (io, socket) =>{
         // either a new join or refresh
         socket.join(roomId)
 
+        const roomSpeakers = activeSpeakers.get(roomId)
+        ? Array.from(activeSpeakers.get(roomId))
+        : [];
+
         const usedColors = new Set(existingUsers.map((u) => u.color))
         const userColor = preferredColor || USER_COLORS.find((c) => !usedColors.has(c))
 
@@ -65,7 +70,8 @@ export const registerSocketHandlers = (io, socket) =>{
             language:room?.language || 'javascript',
             users: updatedUsers,
             userColor,
-            chatHistory
+            chatHistory,
+            activeSpeakers: roomSpeakers
         })
        
         // notify other users in the room
@@ -158,10 +164,25 @@ export const registerSocketHandlers = (io, socket) =>{
 
     // ----- ACTIVE SPEAKER EVENT -----
     socket.on('speaking-change', ({roomId, isSpeaking}) =>{
+        if(!activeSpeakers.has(roomId)){
+            activeSpeakers.set(roomId, new Set())
+        }
+
+        const roomSpeakers = activeSpeakers.get(roomId)
+
+        if(isSpeaking){
+            roomSpeakers.add(socket.id)
+        }
+        else roomSpeakers.delete(socket.id)
+
         socket.to(roomId).emit('user-speaking-changed', {
             socketId: socket.id,
             isSpeaking
         })
+    })
+
+    socket.on('check-speaking-status', ({roomId})=>{
+        socket.to(roomId).emit('check-speaking-status')
     })
 
     // ----- LEAVE/DISCONNECT HANDLERS -----
@@ -193,6 +214,16 @@ export const registerSocketHandlers = (io, socket) =>{
         // 5. Check if the username still exists in Redis under another socket
         const isUserStillInRedis = remainingUsers.some((u) => u.username === leavingUsername);
 
+        // Remove socket.id from activeSpeakers sets if present
+        activeSpeakers.forEach((speakers, roomId) => {
+            if (speakers.has(socket.id)) {
+            speakers.delete(socket.id);
+            socket.to(roomId).emit("user-speaking-changed", {
+                socketId: socket.id,
+                isSpeaking: false,
+            });
+            }
+        });
        
         //  they ACTUALLY left, tell everyone else in the room WHO left
         if (!isUserStillInRedis) {

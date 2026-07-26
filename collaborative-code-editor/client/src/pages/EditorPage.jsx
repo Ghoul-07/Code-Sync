@@ -236,6 +236,36 @@ function EditorPage() {
       });
     }
   };
+
+  // download file handler
+  const handleDownloadCode = () => {
+    const currentCode =
+      typeof editorRef?.current?.getValue === "function"
+        ? editorRef.current.getValue()
+        : code;
+
+    if (!currentCode) return;
+
+    const extensionMap = {
+      javascript: "js",
+      python: "py",
+      cpp: "cpp",
+      java: "java",
+    };
+
+    const ext = extensionMap[language] || "txt";
+    const blob = new Blob([currentCode], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `collaborative-code-${roomId}.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   return (
     <div
       className="app-container"
@@ -332,6 +362,24 @@ function EditorPage() {
             }}
           >
             {isLoading ? "⏳ Running..." : "▶ Run Code"}
+          </button>
+
+          <button
+            onClick={handleDownloadCode}
+            style={{
+              backgroundColor: "#333",
+              color: "#fff",
+              border: "1px solid #555",
+              borderRadius: "4px",
+              padding: "5px 12px",
+              cursor: "pointer",
+              fontSize: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            💾 Download
           </button>
         </div>
       </div>
