@@ -15,7 +15,7 @@ import roomRouter from './routes/room.Routes.js';
 import executionRouter from './routes/executionRoutes.js';
 
 // socket Handlers
-import { registerSocketHandlers } from './sockerHandlers.js';
+import { registerSocketHandlers } from './socketHandlers.js';
 
 
 dotenv.config()

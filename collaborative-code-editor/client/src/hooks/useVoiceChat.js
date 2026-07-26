@@ -1,3 +1,4 @@
+import { loadEnvFile } from "process";
 import { useState, useEffect, useRef } from "react";
 import Peer from "simple-peer/simplepeer.min.js";
 
@@ -78,7 +79,7 @@ export function useVoiceChat(socket, roomId, username) {
 
   // Get Local Microphone stream
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !username) return;
 
     let localStream = null
 
@@ -265,6 +266,9 @@ export function useVoiceChat(socket, roomId, username) {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if(localStream){
+        localStream.getTracks().forEach((track) => track.stop())
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
@@ -279,7 +283,7 @@ export function useVoiceChat(socket, roomId, username) {
       socket.off('check-speaking-status')
       socket.off('room-init')
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, username]);
 
   // toggle Mute / Unmute
   const toggleMute = () => {

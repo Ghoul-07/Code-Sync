@@ -39,7 +39,8 @@ export async function getRoom(roomId){
 
         code: room.code !== undefined ? room.code : "",
         language: room.language || 'javascript',
-        users: room.users ? JSON.parse(room.users) : []
+        users: room.users ? JSON.parse(room.users) : [],
+        password:room.password || null
     }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -12,12 +12,21 @@ import Sidebar from "../components/Sidebar";
 function EditorPage() {
   const { roomId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const username = useMemo(() => {
-    return (
-      location.state?.username || "User-" + Math.floor(Math.random() * 1000)
-    );
-  }, [location.state?.username]);
+  const username = location.state?.username || "";
+  const password = location.state?.password || "";
+
+  // 1. Guard against direct URL access without username
+  useEffect(() => {
+    if (!username && roomId) {
+      toast.error("Please enter a username to join the room", {
+        id: "missing-username-toast",
+        style: { background: "#333", color: "#fff" },
+      });
+      navigate("/", { state: { targetRoomId: roomId }, replace: true });
+    }
+  }, [username, roomId, navigate]);
 
   const [userColor, setUserColor] = useState(() => {
     return sessionStorage.getItem(`room_color_${roomId}`) || null;
@@ -27,7 +36,8 @@ function EditorPage() {
   const [activeUsers, setActiveUsers] = useState([]);
   const editorRef = useRef(null);
 
-  const navigate = useNavigate();
+  // Leave Room Modal State
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   // execution and language states
   const [language, setLanguage] = useState("javascript");
@@ -37,14 +47,17 @@ function EditorPage() {
   const [executionTime, setExecutionTime] = useState(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
 
-  // webRTC mesh voice chat hook
+  // webRTC mesh voice chat hook (only initializes if username exists)
   const { peers, isMuted, toggleMute, isSelfSpeaking, speakingUsers } =
     useVoiceChat(socket, roomId, username);
 
   // Store chat messages
   const [messages, setMessages] = useState([]);
 
-  // helper function to safely set/clear Monaco execution  markers
+  // 2. STOP RENDERING & HOOK EXECUTION EARLY if username is missing
+  if (!username) return null;
+
+  // helper function to safely set/clear Monaco execution markers
   const updateExecutionMarkers = (errorMessage = "", isErr = false) => {
     const editorInstance = editorRef.current?.editor;
     const monacoInstance = editorRef.current?.monaco || window.monaco;
@@ -73,7 +86,6 @@ function EditorPage() {
         },
       ]);
     } else {
-      // clear execution markers if code executed successfully or user is typing
       monacoInstance.editor.setModelMarkers(model, "execution-error", []);
     }
   };
@@ -89,12 +101,13 @@ function EditorPage() {
     }
   };
 
-  const handleLeave = () => {
+  const handleConfirmLeave = () => {
+    setShowLeaveModal(false);
     socket.emit("leave-room", { roomId, username });
     navigate("/");
   };
 
-  // Deduplicate active users array by socketId
+  // Deduplicate active users array by username
   const setUniqueUsers = (usersList = []) => {
     const safeList = Array.isArray(usersList) ? usersList : [];
     setActiveUsers(() => {
@@ -109,17 +122,18 @@ function EditorPage() {
 
   useEffect(() => {
     if (!roomId || !username) return;
+
     // RE-JOIN automatically when socket reconnects
     const handleConnect = () => {
       const preferredColor = sessionStorage.getItem(`room_color_${roomId}`);
       socket.emit("join-room", {
         roomId,
         username,
+        password,
         preferredColor,
       });
     };
 
-    // join room if already connected
     if (socket.connected) {
       handleConnect();
     }
@@ -156,7 +170,6 @@ function EditorPage() {
       }
     });
 
-    // listening to update user in case of a restart
     socket.on("user-list-update", ({ users }) => {
       setUniqueUsers(users);
     });
@@ -174,12 +187,20 @@ function EditorPage() {
       }
     });
 
-    // listening for language sync
+    socket.on("join-error", (msg) => {
+      toast.error(msg, { style: { background: "#333", color: "#fff" } });
+      navigate("/", { state: { targetRoomId: roomId }, replace: true });
+    });
+
+    socket.on("error", (msg) => {
+      toast.error(msg, { style: { background: "#333", color: "#fff" } });
+      navigate("/", { state: { targetRoomId: roomId }, replace: true });
+    });
+
     socket.on("receive-language-change", (newLang) => {
       setLanguage(newLang);
     });
 
-    // listening for remote execution result
     socket.on(
       "receive-execution-result",
       ({ output, isError, executionTime }) => {
@@ -204,8 +225,10 @@ function EditorPage() {
       socket.off("receive-execution-result");
       socket.off("user-list-update");
       socket.off("receive-message");
+      socket.off("error");
+      socket.off("join-error");
     };
-  }, [roomId, username]);
+  }, [roomId, username, password, navigate]);
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
@@ -213,7 +236,6 @@ function EditorPage() {
     socket.emit("language-change", { roomId, language: newLang });
   };
 
-  // run code request handler
   const handleRunCode = async () => {
     setIsLoading(true);
     setIsTerminalOpen(true);
@@ -221,13 +243,9 @@ function EditorPage() {
     const BACKEND_URL =
       import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-    // live code from monaco
     const currentCode = editorRef?.current?.getValue() || "";
-
-    // sync user states
     setCode(currentCode);
 
-    // Notify other users in room that execution started
     socket.emit("code-executed", {
       roomId,
       output: "⏳ Executing code in sandbox container...",
@@ -265,10 +283,8 @@ function EditorPage() {
         editorRef.current.setTerminalState(resultOutput, hasError, timeTaken);
       }
 
-      // highlight error lines in monaco if runtime failed
       updateExecutionMarkers(resultOutput, hasError);
 
-      // broadcast to everyone in the room
       socket.emit("code-executed", {
         roomId,
         output: resultOutput,
@@ -278,7 +294,6 @@ function EditorPage() {
     }
   };
 
-  // download file handler
   const handleDownloadCode = () => {
     const currentCode =
       typeof editorRef?.current?.getValue === "function"
@@ -307,6 +322,7 @@ function EditorPage() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
   return (
     <div
       className="app-container"
@@ -329,7 +345,6 @@ function EditorPage() {
           color: "#ccc",
         }}
       >
-        {/* Room Info & Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{ fontWeight: "bold", fontSize: "14px" }}>
             Room: <span style={{ color: "#4ec9b0" }}>{roomId}</span>
@@ -351,7 +366,7 @@ function EditorPage() {
           </button>
 
           <button
-            onClick={handleLeave}
+            onClick={() => setShowLeaveModal(true)}
             style={{
               backgroundColor: "#f44336",
               color: "#fff",
@@ -367,7 +382,6 @@ function EditorPage() {
           </button>
         </div>
 
-        {/* Language Dropdown & Run Button */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <select
             value={language}
@@ -425,7 +439,7 @@ function EditorPage() {
         </div>
       </div>
 
-      {/* Main Workspace area (Sidebar + Editor & Terminal )*/}
+      {/* Workspace */}
       <div
         style={{
           flex: 1,
@@ -434,7 +448,6 @@ function EditorPage() {
           position: "relative",
         }}
       >
-        {/* Left Sidebar*/}
         <Sidebar
           activeUsers={activeUsers}
           username={username}
@@ -448,7 +461,6 @@ function EditorPage() {
           roomId={roomId}
         />
 
-        {/* Editor and Terminal Workspace */}
         <div
           style={{
             flex: 1,
@@ -459,7 +471,6 @@ function EditorPage() {
             height: "100%",
           }}
         >
-          {/* Editor Wrapper */}
           <div
             style={{
               flex: 1,
@@ -503,11 +514,85 @@ function EditorPage() {
         </div>
       </div>
 
-      {/* Invisible Audio Elements for peer voice chat */}
       {peers.map(({ socketId, peer }) => (
         <AudioPlayer key={socketId} peer={peer} />
       ))}
+
+      {/* Leave Modal */}
+      {showLeaveModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#252526",
+              border: "1px solid #3c3c3c",
+              borderRadius: "8px",
+              padding: "20px",
+              width: "320px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+              color: "#fff",
+            }}
+          >
+            <h3 style={{ margin: "0 0 10px 0", fontSize: "16px" }}>
+              Leave Room?
+            </h3>
+            <p
+              style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#aaa" }}
+            >
+              Are you sure you want to leave this room session?
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                style={{
+                  backgroundColor: "#3a3a3a",
+                  color: "#ccc",
+                  border: "none",
+                  padding: "6px 14px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmLeave}
+                style={{
+                  backgroundColor: "#f44336",
+                  color: "#fff",
+                  border: "none",
+                  padding: "6px 14px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                }}
+              >
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 export default EditorPage;

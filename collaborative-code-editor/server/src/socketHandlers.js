@@ -10,15 +10,23 @@ const USER_COLORS = [
 ];
 
 const activeSpeakers = new Map()  // <roomId, Set<socketId>>
+const MAX_ROOM_CAPACITY = 6
+
 
 export const registerSocketHandlers = (io, socket) =>{
     console.log(`[SOCKET CONNECTED]: ${socket.id}`)
 
     // ----- JOIN-ROOM -----
 
-    socket.on('join-room',  async ({roomId, username, preferredColor}) =>{
+    socket.on('join-room',  async ({roomId, username, password,preferredColor}) =>{
        
         let room = await getRoom(roomId)
+
+        if (room && room.password) {
+            if (!password || password !== room.password) {
+                return socket.emit("error", "Invalid or missing room password");
+            }
+        }
         const existingUsers = room ? room.users : []
 
         const existingUser = existingUsers.find((u) => u.username === username);
@@ -36,6 +44,11 @@ export const registerSocketHandlers = (io, socket) =>{
                 return;
             }
 
+        }
+
+        
+        if(existingUsers.length >= MAX_ROOM_CAPACITY && !existingUser){
+            return socket.emit('join-error', `Room is full! Max ${MAX_ROOM_CAPACITY} members allowed`)
         }
 
         // either a new join or refresh
