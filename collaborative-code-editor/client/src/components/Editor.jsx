@@ -31,6 +31,9 @@ const Editor = forwardRef(
     const ytextRef = useRef(null);
 
     const [status, setStatus] = useState("connecting");
+
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
     const remoteDecorations = useRef(new Map());
 
     useImperativeHandle(ref, () => ({
@@ -58,6 +61,29 @@ const Editor = forwardRef(
         });
       },
     }));
+
+    // Layout Observer to dynamically calculate Monaco width on window resize
+
+    useEffect(() => {
+      const handleResize = () => setIsMobile(window.innerWidth <= 768);
+      window.addEventListener("resize", handleResize);
+
+      const container = document.getElementById("editor-container");
+      if (!container) return;
+
+      const observer = new ResizeObserver(() => {
+        if (editorRef.current) {
+          editorRef.current.layout();
+        }
+      });
+
+      observer.observe(container);
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        observer.disconnect();
+      };
+    }, []);
 
     // Re-bind MonacoBinding & Awareness listeners (handles initial mount AND Vite restarts)
     const setupBinding = () => {
@@ -371,16 +397,17 @@ const Editor = forwardRef(
         <div
           style={{
             position: "absolute",
-            top: "8px",
-            right: "35px",
-            zIndex: 10,
-            padding: "3px 10px",
-            borderRadius: "12px",
-            fontSize: "11px",
+            top: "4px",
+            right: "8px",
+            zIndex: 5,
+            opacity: 0.85,
+            padding: "2px 6px",
+            borderRadius: "10px",
+            fontSize: "10px",
             fontWeight: "600",
             display: "flex",
             alignItems: "center",
-            gap: "6px",
+            gap: "5px",
             backgroundColor:
               status === "connected"
                 ? "#1e3a1e"
@@ -405,8 +432,8 @@ const Editor = forwardRef(
         >
           <span
             style={{
-              width: "7px",
-              height: "7px",
+              width: "5px",
+              height: "5px",
               borderRadius: "50%",
               backgroundColor:
                 status === "connected"
@@ -416,9 +443,10 @@ const Editor = forwardRef(
                     : "#f44336",
             }}
           />
-          {status === "connected" && "Online"}
-          {status === "connecting" && "Reconnecting..."}
-          {status === "disconnected" && "Offline (Edits Buffered)"}
+          {status === "connected" && (isMobile ? "" : "Online")}
+          {status === "connecting" && (isMobile ? "" : "Reconnecting...")}
+          {status === "disconnected" &&
+            (isMobile ? "" : "Offline (Edits Buffered)")}
         </div>
 
         <MonacoEditor
@@ -429,8 +457,8 @@ const Editor = forwardRef(
           language={language}
           onMount={handleEditorDidMount}
           options={{
-            fontSize: 14,
-            minimap: { enabled: true },
+            fontSize: isMobile ? 12 : 14,
+            minimap: { enabled: !isMobile },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 2,
@@ -438,8 +466,8 @@ const Editor = forwardRef(
             overviewRulerLanes: 0, // Disables vertical overview ruler line
             hideCursorInOverviewRuler: true, // Cleans up right edge gutter
             scrollbar: {
-              verticalScrollbarSize: 10, // Slimmer vertical scrollbar
-              horizontalScrollbarSize: 10,
+              verticalScrollbarSize: 8, // Slimmer vertical scrollbar
+              horizontalScrollbarSize: 8,
             },
             padding: { bottom: 40 },
             cursorSurroundingLines: 3,
