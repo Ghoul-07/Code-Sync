@@ -12,7 +12,7 @@ const Terminal = ({
     <div
       style={{
         width: "100%",
-        height: isOpen ? "180px" : "32px",
+        height: isOpen ? "clamp(120px, 25vh, 200px)" : "32px",
         backgroundColor: "#1e1e1e",
         borderTop: "1px solid #333",
         color: "#fff",
@@ -29,7 +29,7 @@ const Terminal = ({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "6px 16px",
+          padding: "6px 12px",
           backgroundColor: "#252526",
           borderBottom: isOpen ? "1px solid #333" : "none",
           userSelect: "none",
@@ -38,12 +38,12 @@ const Terminal = ({
           color: "#ccc",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "12px", fontWeight: "bold", color: "#ccc" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "11px", fontWeight: "bold", color: "#ccc" }}>
             🖥️ TERMINAL OUTPUT
           </span>
           {executionTime && (
-            <span style={{ fontSize: "11px", color: "#888" }}>
+            <span style={{ fontSize: "10px", color: "#888" }}>
               ({executionTime}ms)
             </span>
           )}
@@ -68,11 +68,11 @@ const Terminal = ({
         <div
           style={{
             flex: 1,
-            padding: "12px 16px",
+            padding: "10px 12px",
             overflowY: "auto",
             backgroundColor: "#181818",
             color: isError ? "#ff6b6b" : "#4ec9b0",
-            fontSize: "13px",
+            fontSize: "12px",
             whiteSpace: "pre-wrap",
           }}
         >

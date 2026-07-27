@@ -30,7 +30,7 @@ function Sidebar({
   return (
     <div
       style={{
-        width: "260px",
+        width: "100%",
         backgroundColor: "#1e1e1e",
         borderRight: "1px solid #333",
         display: "flex",
@@ -50,7 +50,7 @@ function Sidebar({
             letterSpacing: "0.5px",
             textTransform: "uppercase",
             color: "#888",
-            marginBottom: "12px",
+            marginBottom: "10px",
           }}
         >
           Room Members ({activeUsers.length})
@@ -62,7 +62,7 @@ function Sidebar({
             display: "flex",
             flexDirection: "column",
             gap: "6px",
-            maxHeight: "180px",
+            maxHeight: "150px",
             overflowY: "auto",
           }}
         >
@@ -99,6 +99,7 @@ function Sidebar({
                       height: "10px",
                       borderRadius: "50%",
                       backgroundColor: u.color || userColor || "#007acc",
+                      flexShrink: 0,
                     }}
                   />
                   <span
@@ -106,6 +107,10 @@ function Sidebar({
                       fontSize: "13px",
                       fontWeight: isMe ? "bold" : "normal",
                       color: isMe ? "#fff" : "#ccc",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: "140px",
                     }}
                   >
                     {u.username}
@@ -118,7 +123,6 @@ function Sidebar({
                       style={{
                         fontSize: "12px",
                         color: "#22c55e",
-                        animation: "pulse 1s infinite",
                       }}
                     >
                       🔊
@@ -136,12 +140,11 @@ function Sidebar({
                       color: "#ffffff",
                       border: "none",
                       borderRadius: "6px",
-                      padding: "6px 8px",
+                      padding: "5px 7px",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      transition: "background-color 0.2s ease",
                     }}
                   >
                     {isMuted ? (
@@ -195,7 +198,7 @@ function Sidebar({
           display: "flex",
           flexDirection: "column",
           borderTop: "1px solid #333",
-          paddingTop: "12px",
+          paddingTop: "10px",
           minHeight: 0,
         }}
       >
@@ -227,7 +230,7 @@ function Sidebar({
           {messages.length === 0 ? (
             <div
               style={{
-                fontSize: "14px",
+                fontSize: "13px",
                 color: "#555",
                 fontStyle: "italic",
                 marginTop: "12px",

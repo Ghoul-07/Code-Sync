@@ -36,6 +36,28 @@ function EditorPage() {
   const [activeUsers, setActiveUsers] = useState([]);
   const editorRef = useRef(null);
 
+  //Responsive state management
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   // Leave Room Modal State
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
@@ -54,7 +76,7 @@ function EditorPage() {
   // Store chat messages
   const [messages, setMessages] = useState([]);
 
-  // 2. STOP RENDERING & HOOK EXECUTION EARLY if username is missing
+  //  STOP RENDERING & HOOK EXECUTION EARLY if username is missing
   if (!username) return null;
 
   // helper function to safely set/clear Monaco execution markers
@@ -336,18 +358,51 @@ function EditorPage() {
       {/* Header */}
       <div
         style={{
-          padding: "10px 20px",
+          padding: "8px 12px",
           backgroundColor: "#252526",
           borderBottom: "1px solid #333",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           color: "#ccc",
+          gap: "8px",
+          zIndex: 10,
+          overflowX: "auto",
+          whiteSpace: "nowrap",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ fontWeight: "bold", fontSize: "14px" }}>
-            Room: <span style={{ color: "#4ec9b0" }}>{roomId}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Hamburger menu Toggle*/}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            style={{
+              backgroundColor: isSidebarOpen ? "#007acc" : "#333",
+              color: "#fff",
+              border: "1px solid #555",
+              padding: "4px 8px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="Toggle Sidebar"
+          >
+            ☰
+          </button>
+
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "13px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: isMobile ? "110px" : "auto",
+            }}
+          >
+            <span style={{ color: "#4ec9b0" }}>{roomId}</span>
           </div>
 
           <button
@@ -356,13 +411,13 @@ function EditorPage() {
               backgroundColor: "#333",
               color: "#fff",
               border: "1px solid #555",
-              padding: "4px 10px",
+              padding: "4px 8px",
               borderRadius: "4px",
               cursor: "pointer",
               fontSize: "12px",
             }}
           >
-            📋 Copy ROOM ID
+            {isMobile ? "📋" : "📋 Copy ID"}
           </button>
 
           <button
@@ -371,18 +426,19 @@ function EditorPage() {
               backgroundColor: "#f44336",
               color: "#fff",
               border: "none",
-              padding: "4px 10px",
+              padding: "4px 8px",
               borderRadius: "4px",
               cursor: "pointer",
               fontSize: "12px",
               fontWeight: "bold",
             }}
           >
-            🚪 Leave
+            {isMobile ? "🚪" : "🚪 Leave"}
           </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Right Section: language , run, download */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <select
             value={language}
             onChange={handleLanguageChange}
@@ -391,13 +447,14 @@ function EditorPage() {
               color: "#fff",
               border: "1px solid #555",
               borderRadius: "4px",
-              padding: "5px 10px",
+              padding: "6px 6px",
               cursor: "pointer",
               fontSize: "12px",
+              maxWidth: isMobile ? "90px" : "150x",
             }}
           >
-            <option value="javascript">JavaScript (Node.js)</option>
-            <option value="python">Python 3</option>
+            <option value="javascript">JavaScript</option>
+            <option value="python">Python</option>
             <option value="cpp">C++</option>
             <option value="java">Java</option>
           </select>
@@ -410,13 +467,14 @@ function EditorPage() {
               color: "#fff",
               border: "none",
               borderRadius: "4px",
-              padding: "5px 14px",
+              padding: "4px 10px",
               fontWeight: "bold",
               cursor: "pointer",
               fontSize: "12px",
+              whiteSpace: "nowrap",
             }}
           >
-            {isLoading ? "⏳ Running..." : "▶ Run Code"}
+            {isLoading ? "⏳" : isMobile ? "▶" : "▶ Run Code"}
           </button>
 
           <button
@@ -426,15 +484,13 @@ function EditorPage() {
               color: "#fff",
               border: "1px solid #555",
               borderRadius: "4px",
-              padding: "5px 12px",
+              padding: "4px 8px",
               cursor: "pointer",
               fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
             }}
+            title="Download Code"
           >
-            💾 Download
+            💾
           </button>
         </div>
       </div>
@@ -448,20 +504,53 @@ function EditorPage() {
           position: "relative",
         }}
       >
-        <Sidebar
-          activeUsers={activeUsers}
-          username={username}
-          userColor={userColor}
-          isMuted={isMuted}
-          toggleMute={toggleMute}
-          isSelfSpeaking={isSelfSpeaking}
-          speakingUsers={speakingUsers}
-          messages={messages}
-          socket={socket}
-          roomId={roomId}
-        />
-
         <div
+          style={{
+            position: isMobile ? "absolute" : "relative",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 99,
+            width: isSidebarOpen ? (isMobile ? "280px" : "260px") : "0px",
+            transition: "width 0.25s ease-in-out",
+            overflow: "hidden",
+            backgroundColor: "#1e1e1e",
+            boxShadow:
+              isMobile && isSidebarOpen
+                ? "4px 0px 16px rgba(0,0,0,0.6)"
+                : "none",
+          }}
+        >
+          <Sidebar
+            activeUsers={activeUsers}
+            username={username}
+            userColor={userColor}
+            isMuted={isMuted}
+            toggleMute={toggleMute}
+            isSelfSpeaking={isSelfSpeaking}
+            speakingUsers={speakingUsers}
+            messages={messages}
+            socket={socket}
+            roomId={roomId}
+          />
+        </div>
+
+        {/*Mobile Backdrop overlay */}
+        {isMobile && isSidebarOpen && (
+          <div
+            onClick={() => setIsSidebarOpen(false)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              zIndex: 98,
+            }}
+          />
+        )}
+
+        {/* Editor and Terminal wrapper */}
+        <div
+          id="editor-container"
           style={{
             flex: 1,
             display: "flex",
@@ -469,6 +558,7 @@ function EditorPage() {
             position: "relative",
             overflow: "hidden",
             height: "100%",
+            width: "100%",
           }}
         >
           <div
@@ -529,6 +619,7 @@ function EditorPage() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
+            padding: "16px",
           }}
         >
           <div
@@ -537,9 +628,11 @@ function EditorPage() {
               border: "1px solid #3c3c3c",
               borderRadius: "8px",
               padding: "20px",
-              width: "320px",
+              width: "100%",
+              maxWidth: "320px",
               boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
               color: "#fff",
+              boxSizing: "border-box",
             }}
           >
             <h3 style={{ margin: "0 0 10px 0", fontSize: "16px" }}>

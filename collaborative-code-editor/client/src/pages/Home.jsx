@@ -130,16 +130,20 @@ function Home() {
         backgroundColor: "#1e1e1e",
         color: "#fff",
         fontFamily: "sans-serif",
+        padding: "16px",
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
           backgroundColor: "#252526",
-          padding: "30px",
+          padding: "clamp(20px, 5vw, 30px)",
           borderRadius: "10px",
-          width: "400px",
+          width: "100%",
+          maxWidth: "400px",
           boxShadow: "0px 10px 30px rgba(0,0,0,0.5)",
           border: "1px solid #333",
+          boxSizing: "border-box",
         }}
       >
         <div
@@ -147,11 +151,11 @@ function Home() {
             display: "flex",
             alignItems: "center",
             gap: "10px",
-            marginBottom: "20px",
+            marginBottom: "16px",
           }}
         >
           <span style={{ fontSize: "28px" }}>💻</span>
-          <h2 style={{ margin: 0, color: "#4ec9b0", fontSize: "22px" }}>
+          <h2 style={{ margin: 0, color: "#4ec9b0", fontSize: "20px" }}>
             Collaborative Code Editor
           </h2>
         </div>
@@ -159,9 +163,10 @@ function Home() {
         <p
           style={{
             color: "#888",
-            fontSize: "14px",
+            fontSize: "13px",
             marginTop: 0,
             marginBottom: "20px",
+            lineHeight: "1.4",
           }}
         >
           Paste invitation ROOM ID or create a new room session
@@ -194,6 +199,7 @@ function Home() {
                 color: "#fff",
                 outline: "none",
                 boxSizing: "border-box",
+                fontSize: "14px",
               }}
             />
           </div>
@@ -224,6 +230,7 @@ function Home() {
                 color: "#fff",
                 outline: "none",
                 boxSizing: "border-box",
+                fontSize: "14px",
               }}
             />
           </div>
@@ -280,6 +287,7 @@ function Home() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
+            padding: "16px",
           }}
         >
           <div
@@ -287,10 +295,12 @@ function Home() {
               backgroundColor: "#252526",
               border: "1px solid #3c3c3c",
               borderRadius: "8px",
-              padding: "24px",
-              width: "360px",
+              padding: "20px",
+              width: "100%",
+              maxWidth: "360px",
               boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
               color: "#fff",
+              boxSizing: "border-box",
             }}
           >
             <h3
@@ -367,6 +377,7 @@ function Home() {
                     color: "#fff",
                     outline: "none",
                     boxSizing: "border-box",
+                    fontSize: "14px",
                   }}
                 />
                 <button
@@ -443,6 +454,7 @@ function Home() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
+            padding: "16px",
           }}
         >
           <div
@@ -450,10 +462,12 @@ function Home() {
               backgroundColor: "#252526",
               border: "1px solid #3c3c3c",
               borderRadius: "8px",
-              padding: "24px",
-              width: "360px",
+              padding: "20px",
+              width: "100%",
+              maxWidth: "360px",
               boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
               color: "#fff",
+              boxSizing: "border-box",
             }}
           >
             <h3
@@ -499,6 +513,7 @@ function Home() {
                     color: "#fff",
                     outline: "none",
                     boxSizing: "border-box",
+                    fontSize: "14px",
                   }}
                 />
                 <button
