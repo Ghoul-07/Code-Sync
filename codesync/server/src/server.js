@@ -23,7 +23,15 @@ dotenv.config()
 const app = express()
 
 // Enable CORS for our Frontend
-app.use(cors())
+const allowedOrigins = process.env.CLIENT_URL || 'http://localhost:5173'
+
+const corsOptions = {
+    origin:allowedOrigins,
+    methods:['GET', 'POST'],
+    credentials: true
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
 
 
@@ -32,7 +40,7 @@ const server = http.createServer(app)
 // Attach Socket.io to the HTTP server
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:5173",
+        origin: allowedOrigins,
         methods: ["GET", "POST"]
     }
 })

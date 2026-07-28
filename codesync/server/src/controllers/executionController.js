@@ -27,19 +27,22 @@ export const executeCode = async (req, res) => {
     cmd = 'node';
     args = [tempFilePath];
     cleanupPaths.push(tempFilePath);
-  } else if (lang === 'python') {
+  } 
+  else if (lang === 'python') {
     tempFilePath = path.join(TEMP_DIR, `${fileId}.py`);
-    cmd = 'python'; // or 'python3' depending on system setup
+    cmd = 'python3';
     args = [tempFilePath];
     cleanupPaths.push(tempFilePath);
-  } else if (lang === 'cpp' || lang === 'c++') {
+  } 
+  else if (lang === 'cpp' || lang === 'c++') {
     tempFilePath = path.join(TEMP_DIR, `${fileId}.cpp`);
-    const exePath = path.join(TEMP_DIR, `${fileId}.exe`);
-    cmd = process.platform === 'win32' ? 'cmd' : 'sh';
+    const exePath = path.join(TEMP_DIR, fileId);
+    cmd ='sh';
     const buildCmd = `g++ "${tempFilePath}" -o "${exePath}" && "${exePath}"`;
-    args = process.platform === 'win32' ? ['/c', buildCmd] : ['-c', buildCmd];
+    args = ['-c', buildCmd];
     cleanupPaths.push(tempFilePath, exePath);
-  } else if (lang === 'java') {
+  }
+  else if (lang === 'java') {
     const javaDir = path.join(TEMP_DIR, fileId);
     fs.mkdirSync(javaDir, { recursive: true });
     tempFilePath = path.join(javaDir, 'Main.java');
@@ -48,7 +51,8 @@ export const executeCode = async (req, res) => {
     const javaCmd = `javac "${tempFilePath}" && java -cp "${javaDir}" Main`;
     args = process.platform === 'win32' ? ['/c', javaCmd] : ['-c', javaCmd];
     cleanupPaths.push(javaDir);
-  } else {
+  } 
+  else {
     return res.status(400).json({ error: `Language ${lang} is not supported` });
   }
 
