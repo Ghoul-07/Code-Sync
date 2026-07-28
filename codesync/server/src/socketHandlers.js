@@ -194,9 +194,16 @@ export const registerSocketHandlers = (io, socket) =>{
         })
     })
 
-    socket.on('check-speaking-status', ({roomId})=>{
-        socket.to(roomId).emit('check-speaking-status')
-    })
+    // Replace socket.on('check-speaking-status') in your server socket handler with this:
+    socket.on('check-speaking-status', ({ roomId }) => {
+        const roomSpeakers = activeSpeakers.get(roomId)
+            ? Array.from(activeSpeakers.get(roomId))
+            : [];
+        
+        socket.emit('room-init', {
+            activeSpeakers: roomSpeakers
+        });
+    });
 
     // ----- LEAVE/DISCONNECT HANDLERS -----
     const handleUserLeave = async (data = {})=>{

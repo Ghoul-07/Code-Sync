@@ -130,18 +130,22 @@ export function useVoiceChat(socket, roomId, username) {
 
             const rms = Math.sqrt(sumSquare / timeData.length);
             const isSpeakingNow = rms > 0.012;
-
             isSelfSpeakingRef.current = isSpeakingNow
 
-            if (isSpeakingNow) {
+            if(isSpeakingNow){
+
+              if(silenceTimeoutRef.current){
+                clearTimeout(silenceTimeoutRef.current)
+                silenceTimeoutRef.current = null
+              }
+
+              
               if (!wasSpeaking) {
                 wasSpeaking = true;
                 setIsSelfSpeaking(true);
                 socket.emit("speaking-change", { roomId, isSpeaking: true });
               }
-              // Reset silence timer every time audio is above threshold
-              if (silenceTimeoutRef.current)
-                clearTimeout(silenceTimeoutRef.current);
+        
             } else {
               if (wasSpeaking && !silenceTimeoutRef.current) {
                 // Wait 300ms of quiet before turning OFF the speaking badge
@@ -167,7 +171,7 @@ export function useVoiceChat(socket, roomId, username) {
 
         //  Respond when a joining user asks "is anyone currently speaking?"
         socket.on("check-speaking-status", () => {
-          if (isSelfSpeakingRef.current) {
+          if (isSelfSpeakingRef.current || silenceTimeoutRef.current) {
             socket.emit("speaking-change", { roomId, isSpeaking: true });
           }
         });
