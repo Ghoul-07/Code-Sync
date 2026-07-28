@@ -449,7 +449,7 @@ function EditorPage() {
               padding: "6px 6px",
               cursor: "pointer",
               fontSize: "12px",
-              maxWidth: isMobile ? "90px" : "150x",
+              maxWidth: isMobile ? "90px" : "150px",
             }}
           >
             <option value="javascript">JavaScript</option>
@@ -568,28 +568,43 @@ function EditorPage() {
               width: "100%",
             }}
           >
-            <Editor
-              ref={editorRef}
-              roomId={roomId}
-              username={username}
-              language={language}
-              color={userColor}
-              serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
-              onCodeChange={(newCode) => {
-                setCode(newCode);
-                updateExecutionMarkers("", false);
-              }}
-              onTerminalSync={({ output, isError, executionTime }) => {
-                setOutput(output || "");
-                setIsError(!!isError);
-                setExecutionTime(executionTime || null);
-                setIsTerminalOpen(true);
+            {/* Render Editor ONLY when userColor has been received from room-init */}
+            {userColor ? (
+              <Editor
+                ref={editorRef}
+                roomId={roomId}
+                username={username}
+                language={language}
+                color={userColor}
+                serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
+                onCodeChange={(newCode) => {
+                  setCode(newCode);
+                  updateExecutionMarkers("", false);
+                }}
+                onTerminalSync={({ output, isError, executionTime }) => {
+                  setOutput(output || "");
+                  setIsError(!!isError);
+                  setExecutionTime(executionTime || null);
+                  setIsTerminalOpen(true);
 
-                setTimeout(() => {
-                  updateExecutionMarkers(output || "", !!isError);
-                }, 100);
-              }}
-            />
+                  setTimeout(() => {
+                    updateExecutionMarkers(output || "", !!isError);
+                  }, 100);
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  color: "#888",
+                }}
+              >
+                Connecting to workspace...
+              </div>
+            )}
           </div>
 
           <Terminal

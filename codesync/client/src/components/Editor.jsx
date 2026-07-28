@@ -133,6 +133,17 @@ const Editor = forwardRef(
       }
     };
 
+    useEffect(() => {
+      if (providerRef.current && providerRef.current.awareness) {
+        providerRef.current.awareness.setLocalStateField("user", {
+          username,
+          color,
+        });
+        // Trigger cursor decoration updates locally and remotely
+        handleAwarenessChange();
+      }
+    }, [username, color]);
+
     // Awareness Change Handler for Remote Cursors
     const handleAwarenessChange = () => {
       if (!providerRef.current) return;
