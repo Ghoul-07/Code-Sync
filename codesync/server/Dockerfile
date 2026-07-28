@@ -1,10 +1,10 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
-RUN apk add --no -cache \
+RUN apk add --no-cache \
   g++ \
   make \
   python3 \
-  openjdk17 -jre
+  openjdk17-jre
 
 WORKDIR /app
 
@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["node", "server.js"]
+CMD ["node", "src/server.js"]

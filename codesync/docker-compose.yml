@@ -1,0 +1,28 @@
+
+services:
+
+  # service 1 : in memory data store
+  redis: 
+    image: redis:alpine
+    ports: 
+      - "6379:6379"
+
+  # service 2:  node.js backend & websockets
+  backend:
+    build: ./server
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - REDIS_URL=redis://redis:6379
+      - CLIENT_URL=http://localhost
+    depends_on:
+      - redis
+
+  # service 3 : nginx + react frontend
+  frontend:
+    build: ./client
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

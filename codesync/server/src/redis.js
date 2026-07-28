@@ -3,23 +3,26 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const redisUrl = process.env.REDIS_URL
+const redisUrl = process.env.REDIS_URL || 'redis://redis:6379'
 
-if(!redisUrl){
-    console.erorr("REDIS_URL missing in env")
+if(!process.env.REDIS_URL){
+    console.error("REDIS_URL missing in env, falling back to local/docker redis")
 }
 
-// create pub sub clients for Socket.io adapter
-export const pubClient = new Redis(redisUrl, {
+const isTls = redisUrl.startsWith('rediss://')
+
+const redisOptions = {
     maxRetriesPerRequest: null,
-    tls: {rejectUnauthorized: false}
-})
-
-
+    ...(isTls && {tls: { rejectUnauthorized: false } })
+}
+// create pub sub clients for Socket.io adapter
+export const pubClient = new Redis(redisUrl, redisOptions)
 export const subClient = pubClient.duplicate()
-pubClient.on("connect", ()=> console.log("⚡ Connected to Upstash Redis (Pub)"))
+
+pubClient.on("connect", ()=> console.log(`⚡ Connected to Redis (${isTls ? 'Cloud/TLS' : 'Local/Docker'})`))
 pubClient.on("error", (err) => console.error("Redis Pub Error: ", err))
 
+subClient.on("error", (err) => console.error("Redis Sub Error: ", err.message))
 // ==========================================
 // REDIS ROOM STATE HELPERS
 // ==========================================
@@ -53,7 +56,7 @@ export async function updateRoomCode(roomId, code){
 }
 
 export async function updateRoomLanguage(roomId, language){
-    await pubClient.hset(`room:${roomId}`, {language})
+    await pubClient.hset(`room:${roomId}`, "language" , language)
 }
 
 /* 
@@ -136,7 +139,7 @@ export async function addChatMessage(roomId, messageObj){
         await pubClient.expire(key, 86400)
         
     }catch(err){
-        console.log("Redis addChatMessage Error: ", err)
+        console.error("Redis addChatMessage Error: ", err)
     }
 }
 
@@ -156,6 +159,6 @@ export async function getRoomChats(roomId) {
 
         return rawChats.map((msg) => JSON.parse(msg))
     } catch(err){
-        console.log("Redis getRoomChats history", err)
+        console.error("Redis getRoomChats history", err)
     }
 }

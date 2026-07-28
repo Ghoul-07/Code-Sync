@@ -14,7 +14,7 @@ const MAX_ROOM_CAPACITY = 6
 
 
 export const registerSocketHandlers = (io, socket) =>{
-    console.log(`[SOCKET CONNECTED]: ${socket.id}`)
+    
 
     // ----- JOIN-ROOM -----
 
@@ -72,7 +72,6 @@ export const registerSocketHandlers = (io, socket) =>{
             color:userColor
         })
 
-        console.log(`[ROOM-JOIN]: ${username} joined room ${roomId}`)
     
         
         const chatHistory = await getRoomChats(roomId)        // fetch chats from redis
@@ -224,7 +223,7 @@ export const registerSocketHandlers = (io, socket) =>{
 
         const remainingUsers = await removeUserFromRoom(roomId, socket.id, leavingUsername)
         
-        console.log(`[ROOM LEAVE]: ${leavingUsername} ${socket.id} left room ${roomId} `)
+
 
         // 4. Deduplicate remaining users by username for the UI badges
         const uniqueUsers = Array.from(
