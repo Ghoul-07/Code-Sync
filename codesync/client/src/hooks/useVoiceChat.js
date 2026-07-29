@@ -147,7 +147,11 @@ export function useVoiceChat(socket, roomId, username) {
 
     // Attach stream request to promise ref to prevent dropped signaling events
     streamReadyRef.current = navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
+      .getUserMedia({ audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }, video: false })
       .then(async (stream) => {
         if (!mounted) {
           stream.getTracks().forEach((track) => track.stop());
@@ -277,8 +281,13 @@ export function useVoiceChat(socket, roomId, username) {
     };
 
     const handleWebRTCOffer = async ({ fromSocketId, offer }) => {
-      if (peersRef.current.has(fromSocketId)) return;
+      const existingPeer = peersRef.current.get(fromSocketId)
 
+      if(existingPeer){
+        existingPeer.signal()       // trickled ICE candidate , not a new offer
+        return
+      }
+  
       const streamPromise = streamReadyRef.current;
       if (!streamPromise) return;
 
