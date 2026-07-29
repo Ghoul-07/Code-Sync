@@ -156,7 +156,7 @@ function Home() {
         >
           <span style={{ fontSize: "28px" }}>💻</span>
           <h2 style={{ margin: 0, color: "#4ec9b0", fontSize: "20px" }}>
-            Collaborative Code Editor
+            Code-Sync
           </h2>
         </div>
 

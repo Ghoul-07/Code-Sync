@@ -13,6 +13,7 @@ import { pubClient, subClient } from './redis.js'
 // routers
 import roomRouter from './routes/room.Routes.js';
 import executionRouter from './routes/executionRoutes.js';
+import credentialRouter from './routes/credential.routes.js';
 
 // socket Handlers
 import { registerSocketHandlers } from './socketHandlers.js';
@@ -76,7 +77,8 @@ wss.on('connection', (conn, req) =>{
 
 // Routes
 app.use('/api/execute', executionRouter)
-app.use('/api/rooms/', roomRouter)
+app.use('/api/rooms', roomRouter)
+app.use('/api/credentials', credentialRouter)
 app.get('/health', (req, res) =>{
     res.status(200).json({ status: 'OK', message: 'Server is healthy' })
 })

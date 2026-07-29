@@ -21,6 +21,11 @@ export function AudioPlayer({ peer }) {
   }, [peer]);
 
   return (
-    <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />
+    <audio
+      ref={audioRef}
+      autoPlay
+      playsInline
+      style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
+    />
   );
 }
