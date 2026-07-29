@@ -1,32 +1,32 @@
 import { useState, useEffect, useRef } from "react";
 import Peer from "simple-peer/simplepeer.min.js";
-import axios from 'axios'
+import axios from "axios";
 
-const fetchIceServers = async() =>{
+const fetchIceServers = async () => {
   const STUN_FALLBACK = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" }
-  ]
-  try{
-    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ""
+    { urls: "stun:stun2.l.google.com:19302" },
+  ];
+  try {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 
-    const res = await axios.get(`${BACKEND_URL}/api/credentials/turn-credentials`)
+    const res = await axios.get(`${BACKEND_URL}/api/credentials/turn-credentials`);
 
     if (typeof res.data === "string" || !Array.isArray(res.data)) {
       console.warn("[VOICE CHAT] Received non-array response, falling back to STUN:", res.data);
       return { iceServers: STUN_FALLBACK };
     }
-    console.log(res)
 
-    const iceServers = await res.data
+    // 📍 FIX: Direct assignment (no useless await on res.data)
+    const iceServers = res.data; 
 
-    return {iceServers}
-  } catch(err){
-      console.warn("[VOICE CHAT] Backend TURN fetch failed, falling back to public STUN:", err);
-      return { iceServers: STUN_FALLBACK}
+    return { iceServers };
+  } catch (err) {
+    console.warn("[VOICE CHAT] Backend TURN fetch failed, falling back to public STUN:", err);
+    return { iceServers: STUN_FALLBACK };
   }
-}
+};
 
 export function useVoiceChat(socket, roomId, username) {
   // Store remote streams for UI rendering: [{ socketId, stream, peer }]
@@ -38,22 +38,22 @@ export function useVoiceChat(socket, roomId, username) {
   const isSelfSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const peersRef = useRef(new Map()); // Map<socketId, peerInstance>
-  const remoteStreamsRef = useRef(new Map()); // Map<socketId, MediaStream> (Safe stream tracking)
+  const remoteStreamsRef = useRef(new Map()); // Map<socketId, MediaStream>
   const localStreamRef = useRef(null);
-  const streamReadyRef = useRef(null); // Promise reference to queue events while mic initializes
+  const streamReadyRef = useRef(null); // Promise reference
   const audioContextRef = useRef(null);
   const animationFrameRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
 
   // Helper: Create initiator Peer (Offer)
   async function createPeer(userToSignal, stream) {
-    const config = await fetchIceServers()
+    const config = await fetchIceServers();
 
     const peer = new Peer({
       initiator: true,
       trickle: true,
       stream,
-      config
+      config,
     });
 
     peer.on("signal", (signalData) => {
@@ -77,31 +77,35 @@ export function useVoiceChat(socket, roomId, username) {
       console.error(`[WebRTC Error - Peer ${userToSignal}]:`, err);
     });
 
-    peer.on("close",()=>{
-        peersRef.current.delete(userToSignal)
+    peer.on("close", () => {
+      peersRef.current.delete(userToSignal);
 
-        setPeers(prev =>
-          prev.filter(p => p.socketId !== userToSignal)
-        );
+      const remoteStream = remoteStreamsRef.current.get(userToSignal);
+      if (remoteStream) {
+        remoteStream.getTracks().forEach((track) => track.stop());
+        remoteStreamsRef.current.delete(userToSignal);
+      }
 
-        setSpeakingUsers(prev=>{
-          const next = new Set(prev);
-          next.delete(userToSignal);
-          return next;
-        });
-    })
+      setPeers((prev) => prev.filter((p) => p.socketId !== userToSignal));
+
+      setSpeakingUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(userToSignal);
+        return next;
+      });
+    });
 
     return peer;
   }
 
   // Helper: Create receiver Peer (Answer)
   async function addPeer(incomingOffer, callerSocketId, stream) {
-    const config = await fetchIceServers()
+    const config = await fetchIceServers();
     const peer = new Peer({
       initiator: false,
       trickle: true,
       stream,
-      config
+      config,
     });
 
     peer.on("signal", (signalData) => {
@@ -125,18 +129,24 @@ export function useVoiceChat(socket, roomId, username) {
       console.error(`[WebRTC Error - Peer ${callerSocketId}]:`, err);
     });
 
-    peer.on("close",()=>{
-      peersRef.current.delete(callerSocketId)
-      setPeers(prev =>
-        prev.filter(p => p.socketId !== callerSocketId)
-      );
+    peer.on("close", () => {
+      peersRef.current.delete(callerSocketId);
 
-      setSpeakingUsers(prev=>{
+      const remoteStream = remoteStreamsRef.current.get(callerSocketId);
+      if (remoteStream) {
+        remoteStream.getTracks().forEach((track) => track.stop());
+        remoteStreamsRef.current.delete(callerSocketId);
+      }
+
+      setPeers((prev) => prev.filter((p) => p.socketId !== callerSocketId));
+
+      setSpeakingUsers((prev) => {
         const next = new Set(prev);
         next.delete(callerSocketId);
         return next;
       });
-  })
+    });
+
     peer.signal(incomingOffer);
     return peer;
   }
@@ -145,13 +155,15 @@ export function useVoiceChat(socket, roomId, username) {
   useEffect(() => {
     let mounted = true;
 
-    // Attach stream request to promise ref to prevent dropped signaling events
     streamReadyRef.current = navigator.mediaDevices
-      .getUserMedia({ audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }, video: false })
+      .getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      })
       .then(async (stream) => {
         if (!mounted) {
           stream.getTracks().forEach((track) => track.stop());
@@ -160,7 +172,6 @@ export function useVoiceChat(socket, roomId, username) {
 
         localStreamRef.current = stream;
 
-        // Audio Analyzer for Speaking Detection
         try {
           const AudioContext = window.AudioContext || window.webkitAudioContext;
           const audioContext = new AudioContext();
@@ -262,10 +273,9 @@ export function useVoiceChat(socket, roomId, username) {
     const handleUserJoined = async ({ socketId: newUserSocketId }) => {
       if (peersRef.current.has(newUserSocketId)) return;
 
-      const streamPromise = streamReadyRef.current
-      if(!streamPromise) return
+      const streamPromise = streamReadyRef.current;
+      if (!streamPromise) return;
 
-      // Await mic resolution to avoid streamless peer creation without dropping events
       const stream = await streamPromise;
       if (!stream) return;
 
@@ -281,13 +291,14 @@ export function useVoiceChat(socket, roomId, username) {
     };
 
     const handleWebRTCOffer = async ({ fromSocketId, offer }) => {
-      const existingPeer = peersRef.current.get(fromSocketId)
+      const existingPeer = peersRef.current.get(fromSocketId);
 
-      if(existingPeer){
-        existingPeer.signal()       // trickled ICE candidate , not a new offer
-        return
+      // 📍 FIX: Pass `offer` into existingPeer.signal(offer)
+      if (existingPeer) {
+        existingPeer.signal(offer);
+        return;
       }
-  
+
       const streamPromise = streamReadyRef.current;
       if (!streamPromise) return;
 
@@ -316,22 +327,7 @@ export function useVoiceChat(socket, roomId, username) {
       const peer = peersRef.current.get(leftUserId);
       if (peer) {
         peer.destroy();
-        peersRef.current.delete(leftUserId);
       }
-
-      // Safely stop tracks from custom remote stream tracker
-      const remoteStream = remoteStreamsRef.current.get(leftUserId);
-      if (remoteStream) {
-        remoteStream.getTracks().forEach((track) => track.stop());
-        remoteStreamsRef.current.delete(leftUserId);
-      }
-
-      setPeers((prev) => prev.filter((p) => p.socketId !== leftUserId));
-      setSpeakingUsers((prev) => {
-        const next = new Set(prev);
-        next.delete(leftUserId);
-        return next;
-      });
     };
 
     const handleUserSpeakingChanged = ({ socketId: speakerSocketId, isSpeaking }) => {
@@ -359,7 +355,6 @@ export function useVoiceChat(socket, roomId, username) {
       }
     };
 
-    // Attach named listeners
     socket.on("user-joined", handleUserJoined);
     socket.on("webrtc-offer", handleWebRTCOffer);
     socket.on("webrtc-answer", handleWebRTCAnswer);
@@ -368,7 +363,6 @@ export function useVoiceChat(socket, roomId, username) {
     socket.on("check-speaking-status", handleCheckSpeakingStatus);
     socket.on("room-init", handleRoomInit);
 
-    // Specific cleanup using handler references
     return () => {
       peersRef.current.forEach((peer) => peer.destroy());
       peersRef.current.clear();

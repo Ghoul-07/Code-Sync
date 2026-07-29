@@ -5,10 +5,13 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import MonacoEditor from "@monaco-editor/react";
+import MonacoEditor, { loader } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
+
+loader.config({ monaco });
 
 const Editor = forwardRef(
   (

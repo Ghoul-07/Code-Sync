@@ -36,7 +36,7 @@ function EditorPage() {
   const [activeUsers, setActiveUsers] = useState([]);
   const editorRef = useRef(null);
 
-  //Responsive state management
+  // Responsive state management
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -61,7 +61,7 @@ function EditorPage() {
   // Leave Room Modal State
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
-  // execution and language states
+  // Execution and language states
   const [language, setLanguage] = useState("javascript");
   const [output, setOutput] = useState("");
   const [isError, setIsError] = useState(false);
@@ -69,17 +69,17 @@ function EditorPage() {
   const [executionTime, setExecutionTime] = useState(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
 
-  // webRTC mesh voice chat hook (only initializes if username exists)
+  // WebRTC mesh voice chat hook (only initializes if username exists)
   const { peers, isMuted, toggleMute, isSelfSpeaking, speakingUsers } =
     useVoiceChat(socket, roomId, username);
 
   // Store chat messages
   const [messages, setMessages] = useState([]);
 
-  //  STOP RENDERING & HOOK EXECUTION EARLY if username is missing
+  // STOP RENDERING EARLY if username is missing
   if (!username) return null;
 
-  // helper function to safely set/clear Monaco execution markers
+  // Helper function to safely set/clear Monaco execution markers
   const updateExecutionMarkers = (errorMessage = "", isErr = false) => {
     const editorInstance = editorRef.current?.editor;
     const monacoInstance = editorRef.current?.monaco || window.monaco;
@@ -371,7 +371,7 @@ function EditorPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          {/* Hamburger menu Toggle*/}
+          {/* Hamburger menu Toggle */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             style={{
@@ -436,7 +436,7 @@ function EditorPage() {
           </button>
         </div>
 
-        {/* Right Section: language , run, download */}
+        {/* Right Section: language, run, download */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <select
             value={language}
@@ -534,7 +534,7 @@ function EditorPage() {
           />
         </div>
 
-        {/*Mobile Backdrop overlay */}
+        {/* Mobile Backdrop overlay */}
         {isMobile && isSidebarOpen && (
           <div
             onClick={() => setIsSidebarOpen(false)}
@@ -618,8 +618,9 @@ function EditorPage() {
         </div>
       </div>
 
-      {peers.map(({ socketId, peer }) => (
-        <AudioPlayer key={socketId} peer={peer} />
+      {/* Audio Players for WebRTC Remote Streams */}
+      {peers.map(({ socketId, stream, peer }) => (
+        <AudioPlayer key={socketId} peer={peer} stream={stream} />
       ))}
 
       {/* Leave Modal */}
@@ -653,7 +654,11 @@ function EditorPage() {
               Leave Room?
             </h3>
             <p
-              style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#aaa" }}
+              style={{
+                margin: "0 0 20px 0",
+                fontSize: "13px",
+                color: "#aaa",
+              }}
             >
               Are you sure you want to leave this room session?
             </p>
