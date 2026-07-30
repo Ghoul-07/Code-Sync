@@ -304,16 +304,6 @@ const Editor = forwardRef(
 
       setupBinding();
 
-      const domNode = editor.getDomNode();
-      const textarea = domNode?.querySelector("textarea");
-      if (textarea) {
-        textarea.addEventListener("compositionend", () => {
-          // nudge Monaco to re-emit a content-change event once IME composition
-          // has fully settled, giving y-monaco a clean edit to sync
-          editor.trigger("keyboard", "type", { text: "" });
-        });
-      }
-
       const pushCursorState = () => {
         if (!providerRef.current) return;
         const position = editor.getPosition();
@@ -333,16 +323,38 @@ const Editor = forwardRef(
         });
       };
 
-      //  Clear execution markers locally as soon as content changes!
+      // --- reconciliation safety net ---
+      let reconcileTimer = null;
+      const scheduleReconcile = () => {
+        clearTimeout(reconcileTimer);
+        reconcileTimer = setTimeout(() => {
+          if (!ytextRef.current || !ydocRef.current || !editorRef.current)
+            return;
+          const model = editorRef.current.getModel();
+          if (!model) return;
+
+          const localValue = model.getValue();
+          const sharedValue = ytextRef.current.toString();
+
+          if (localValue !== sharedValue) {
+            ydocRef.current.transact(() => {
+              ytextRef.current.delete(0, ytextRef.current.length);
+              ytextRef.current.insert(0, localValue);
+            });
+          }
+        }, 1500); // only fires 1.5s after typing stops
+      };
+      // --- end reconciliation safety net ---
+
       editor.onDidChangeModelContent(() => {
         const model = editor.getModel();
         if (model) {
           monaco.editor.setModelMarkers(model, "execution-error", []);
         }
         pushCursorState();
+        scheduleReconcile();
       });
 
-      // Listen to code changes for parent callback
       if (ytextRef.current) {
         ytextRef.current.observe(() => {
           if (onCodeChange) {
@@ -351,7 +363,6 @@ const Editor = forwardRef(
         });
       }
 
-      // Local cursor movement emission
       editor.onDidChangeCursorPosition(pushCursorState);
     };
 
