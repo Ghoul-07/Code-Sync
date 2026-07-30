@@ -78,6 +78,7 @@ export function useVoiceChat(socket, roomId, username) {
     });
 
     peer.on("close", () => {
+      console.log(`[PEER CLOSE] ${userToSignal} at ${new Date().toISOString()}`);
       peersRef.current.delete(userToSignal);
 
       const remoteStream = remoteStreamsRef.current.get(userToSignal);
@@ -130,6 +131,7 @@ export function useVoiceChat(socket, roomId, username) {
     });
 
     peer.on("close", () => {
+      console.log(`[PEER CLOSE] ${callerSocketId} at ${new Date().toISOString()}`);
       peersRef.current.delete(callerSocketId);
 
       const remoteStream = remoteStreamsRef.current.get(callerSocketId);

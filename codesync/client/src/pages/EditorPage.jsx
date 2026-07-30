@@ -147,6 +147,9 @@ function EditorPage() {
 
     // RE-JOIN automatically when socket reconnects
     const handleConnect = () => {
+      console.log(
+        `[SOCKET CONNECT] new socket.id=${socket.id} at ${new Date().toISOString()}`,
+      );
       const preferredColor = sessionStorage.getItem(`room_color_${roomId}`);
       socket.emit("join-room", {
         roomId,
@@ -160,6 +163,12 @@ function EditorPage() {
       handleConnect();
     }
     socket.on("connect", handleConnect);
+
+    socket.on("disconnect", (reason) => {
+      console.log(
+        `[SOCKET DISCONNECT] reason=${reason} at ${new Date().toISOString()}`,
+      );
+    });
 
     socket.on(
       "room-init",

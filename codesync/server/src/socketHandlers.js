@@ -19,6 +19,8 @@ export const registerSocketHandlers = (io, socket) =>{
     // ----- JOIN-ROOM -----
 
     socket.on('join-room',  async ({roomId, username, password,preferredColor}) =>{
+
+        console.log(`[JOIN-ROOM] socket=${socket.id} user=${username} room=${roomId} at ${new Date().toISOString()}`);
        
         let room = await getRoom(roomId)
 
@@ -211,6 +213,7 @@ export const registerSocketHandlers = (io, socket) =>{
 
     // ----- LEAVE/DISCONNECT HANDLERS -----
     const handleUserLeave = async (data = {})=>{
+        console.log(`[DISCONNECT/LEAVE] socket=${socket.id} at ${new Date().toISOString()}`);
         const roomId = socket.roomId || data?.roomId
         if(!roomId) return
 
