@@ -20,7 +20,7 @@ const fetchIceServers = async () => {
 
     // 📍 FIX: Direct assignment (no useless await on res.data)
     const iceServers = res.data; 
-
+    console.log(res);
     return { iceServers };
   } catch (err) {
     console.warn("[VOICE CHAT] Backend TURN fetch failed, falling back to public STUN:", err);
@@ -271,6 +271,7 @@ export function useVoiceChat(socket, roomId, username) {
     if (!socket || !roomId || !username) return;
 
     const handleUserJoined = async ({ socketId: newUserSocketId }) => {
+      console.log(`[JOIN] ${newUserSocketId} at ${new Date().toISOString()} — destroying peer`)
       if (peersRef.current.has(newUserSocketId)) return;
 
       const streamPromise = streamReadyRef.current;
@@ -324,6 +325,7 @@ export function useVoiceChat(socket, roomId, username) {
     };
 
     const handleUserLeft = ({ socketId: leftUserId }) => {
+      console.log(`[LEFT] ${leftUserId} at ${new Date().toISOString()} — destroying peer`)
       const peer = peersRef.current.get(leftUserId);
       if (peer) {
         peer.destroy();
