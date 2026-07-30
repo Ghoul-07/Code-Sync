@@ -304,7 +304,16 @@ const Editor = forwardRef(
 
       setupBinding();
 
-      //
+      const domNode = editor.getDomNode();
+      const textarea = domNode?.querySelector("textarea");
+      if (textarea) {
+        textarea.addEventListener("compositionend", () => {
+          // nudge Monaco to re-emit a content-change event once IME composition
+          // has fully settled, giving y-monaco a clean edit to sync
+          editor.trigger("keyboard", "type", { text: "" });
+        });
+      }
+
       const pushCursorState = () => {
         if (!providerRef.current) return;
         const position = editor.getPosition();
