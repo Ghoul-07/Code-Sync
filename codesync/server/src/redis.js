@@ -67,9 +67,6 @@ export async function addUserToRoom(roomId, user){
     
     const existingUsers = (room && Array.isArray(room.users)) ? room.users : [];
 
-    // filter our existing socket entries if present
-    // const updatedUsers = existingUsers.filter((u) => u.socketId !== user.socketId  && u.username?.toLowerCase() !== user.username?.toLowerCase())
-
     const updatedUsers = existingUsers.filter((u) => {
         if (!u) return false;
 
@@ -86,41 +83,59 @@ export async function addUserToRoom(roomId, user){
         "users", JSON.stringify(updatedUsers)
     )
 
+    // a user actually joined, persist the room
+    await pubClient.persist(`room:${roomId}`)
+
     return {updatedUsers}
 }
+
 /**
- * Removes a student from a room when they disconnect
+ * Removes a user from a room when they disconnect.
+ * Atomically reads, filters, and deletes the room (+ chat history)
+ * if it becomes empty — avoids race conditions from concurrent disconnects.
  */
+export async function removeUserFromRoom(roomId, socketId, username) {
+    const key = `room:${roomId}`
+    const chatsKey = `room:${roomId}:chats`
 
-export async function removeUserFromRoom(roomId, socketId, username){
-    const room = await getRoom(roomId)
+    const script = `
+        local usersRaw = redis.call('HGET', KEYS[1], 'users')
+        if not usersRaw then return '[]' end
 
-    if(!room) return []
+        local ok, users = pcall(cjson.decode, usersRaw)
+        if not ok or type(users) ~= 'table' then return '[]' end
 
-    const existingUsers = Array.isArray(room.users) ? room.users : [];
+        local updated = {}
+        for _, u in ipairs(users) do
+            local matchesSocket = (ARGV[1] ~= '' and u.socketId == ARGV[1])
+            local matchesUsername = (ARGV[2] ~= '' and u.username == ARGV[2])
+            if not (matchesSocket or matchesUsername) then
+                table.insert(updated, u)
+            end
+        end
 
-    // we should be removing the user with the matching socketId and username
-    const updatedUsers = existingUsers.filter((u) => {
-        // Check if socketId matches (only if socketId was provided)
-        const matchesSocket = socketId && u.socketId === socketId;
+        if #updated == 0 then
+            redis.call('DEL', KEYS[1])
+            redis.call('DEL', KEYS[2])
+        else
+            redis.call('HSET', KEYS[1], 'users', cjson.encode(updated))
+        end
 
-        // Check if username matches (only if username was provided)
-        const matchesUsername = username && u.username === username;
+        return cjson.encode(updated)
+    `
 
-        // Drop the user if EITHER condition matches!
-        // (Keep them only if NEITHER matched)
-        return !(matchesSocket || matchesUsername);
-        
-    } )
-
-    if(updatedUsers.length === 0){
-        await pubClient.del(`room:${roomId}`)
+    try {
+        const result = await pubClient.eval(
+            script,
+            2,           // number of KEYS
+            key, chatsKey,
+            socketId || '', username || ''
+        )
+        return JSON.parse(result)
+    } catch (err) {
+        console.error("Redis removeUserFromRoom Error: ", err)
+        return []
     }
-
-    else{
-        await pubClient.hset(`room:${roomId}`, "users", JSON.stringify(updatedUsers))
-    }
-    return updatedUsers
 }
 
 

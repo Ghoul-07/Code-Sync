@@ -274,7 +274,6 @@ function Sidebar({
                     </span>
                   </div>
                   <div style={{ color: "#ddd", wordBreak: "break-word" }}>
-                    {console.log(msg.message)}
                     {msg.message}
                   </div>
                 </div>

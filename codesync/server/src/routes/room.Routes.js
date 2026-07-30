@@ -77,8 +77,12 @@ roomRouter.post("/create", async (req, res) => {
       password: password || "",
     });
 
+    await pubClient.expire(`room:${roomId}`, 30)
+
     return res.json({ success: true, message: "Room created successfully" });
+
   } catch (err) {
+    console.error("Room creation error: ",err)
     return res.status(500).json({ error: "Failed to create room " });
   }
 });

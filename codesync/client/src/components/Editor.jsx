@@ -532,6 +532,7 @@ function injectCursorStyle(classPrefix, color, username) {
       border-radius: 3px;
       white-space: nowrap;
       pointer-events: none;
+      opacity: 0.15;
       z-index: 101 !important;
       box-shadow: 0px 2px 4px rgba(0,0,0,0.5);
     }
