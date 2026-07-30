@@ -10,6 +10,17 @@ import * as monaco from "monaco-editor";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === "typescript" || label === "javascript") {
+      return new tsWorker();
+    }
+    return new editorWorker();
+  },
+};
 
 loader.config({ monaco });
 
@@ -108,7 +119,6 @@ const Editor = forwardRef(
         ytext,
         editor.getModel(),
         new Set([editor]),
-        provider.awareness,
       );
 
       // 2. Re-attach Awareness Observer for Remote Cursors
@@ -485,6 +495,7 @@ const Editor = forwardRef(
             },
             padding: { bottom: 40 },
             cursorSurroundingLines: 3,
+            inlayHints: { enabled: "off" },
           }}
         />
       </div>
