@@ -12,7 +12,6 @@ const USER_COLORS = [
 const activeSpeakers = new Map()  // <roomId, Set<socketId>>
 const MAX_ROOM_CAPACITY = 6
 
-
 export const registerSocketHandlers = (io, socket) =>{
     
 

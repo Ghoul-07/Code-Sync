@@ -17,7 +17,7 @@ function Sidebar({
 
   // Auto-scroll to latest chat message
   useEffect(() => {
-    chatBottomRef?.current?.scrollIntoView({ behaviour: "smooth" });
+    chatBottomRef?.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSendMessage = (e) => {
@@ -84,7 +84,7 @@ function Sidebar({
                   border: isSpeaking ? "1px solid #22c553" : "1px solid #333", // Glowing green when speaking
                   borderRadius: "6px",
                   boxShadow: isSpeaking
-                    ? "0 0 8px rgba(34, 197, 94, 0.4"
+                    ? "0 0 8px rgba(34, 197, 94, 0.4)"
                     : "none",
                   transition: "all 0.15s ease",
                 }}

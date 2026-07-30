@@ -304,12 +304,33 @@ const Editor = forwardRef(
 
       setupBinding();
 
+      //
+      const pushCursorState = () => {
+        if (!providerRef.current) return;
+        const position = editor.getPosition();
+        const selection = editor.getSelection();
+        if (!position) return;
+
+        providerRef.current.awareness.setLocalStateField("cursor", {
+          position,
+          selection: selection
+            ? {
+                startLineNumber: selection.startLineNumber,
+                startColumn: selection.startColumn,
+                endLineNumber: selection.endLineNumber,
+                endColumn: selection.endColumn,
+              }
+            : null,
+        });
+      };
+
       //  Clear execution markers locally as soon as content changes!
       editor.onDidChangeModelContent(() => {
         const model = editor.getModel();
         if (model) {
           monaco.editor.setModelMarkers(model, "execution-error", []);
         }
+        pushCursorState();
       });
 
       // Listen to code changes for parent callback
@@ -322,21 +343,7 @@ const Editor = forwardRef(
       }
 
       // Local cursor movement emission
-      editor.onDidChangeCursorPosition((e) => {
-        if (!providerRef.current) return;
-        const selection = editor.getSelection();
-        providerRef.current.awareness.setLocalStateField("cursor", {
-          position: e.position,
-          selection: selection
-            ? {
-                startLineNumber: selection.startLineNumber,
-                startColumn: selection.startColumn,
-                endLineNumber: selection.endLineNumber,
-                endColumn: selection.endColumn,
-              }
-            : null,
-        });
-      });
+      editor.onDidChangeCursorPosition(pushCursorState);
     };
 
     const updateRemoteCursor = ({
@@ -532,10 +539,18 @@ function injectCursorStyle(classPrefix, color, username) {
       border-radius: 3px;
       white-space: nowrap;
       pointer-events: none;
-      opacity: 0.15;
       z-index: 101 !important;
       box-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+      opacity: 1;
+      animation: cursorLabelFade 1.6s ease forwards
     }
+
+    @keyframes cursorLabelFade {
+      0%   { opacity: 1; }
+      65%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+         
     .${classPrefix}-line-1::after {
       top: 20px !important;
     }
