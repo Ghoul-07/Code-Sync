@@ -35,6 +35,11 @@ export function useVoiceChat(socket, roomId, username) {
   const isSelfSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const peersRef = useRef(new Map()); // Map<socketId, peerInstance | "pending">
+
+  useEffect(() => {
+    window.__voicePeers = peersRef.current;
+  }, [peers]);
+  
   const pendingSignalsRef = useRef(new Map()); // Map<socketId, signalData[]> — queued while peer is "pending"
   const remoteStreamsRef = useRef(new Map());
   const localStreamRef = useRef(null);
