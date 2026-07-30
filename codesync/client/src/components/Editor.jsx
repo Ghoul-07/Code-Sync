@@ -323,36 +323,12 @@ const Editor = forwardRef(
         });
       };
 
-      // --- reconciliation safety net ---
-      let reconcileTimer = null;
-      const scheduleReconcile = () => {
-        clearTimeout(reconcileTimer);
-        reconcileTimer = setTimeout(() => {
-          if (!ytextRef.current || !ydocRef.current || !editorRef.current)
-            return;
-          const model = editorRef.current.getModel();
-          if (!model) return;
-
-          const localValue = model.getValue();
-          const sharedValue = ytextRef.current.toString();
-
-          if (localValue !== sharedValue) {
-            ydocRef.current.transact(() => {
-              ytextRef.current.delete(0, ytextRef.current.length);
-              ytextRef.current.insert(0, localValue);
-            });
-          }
-        }, 1500); // only fires 1.5s after typing stops
-      };
-      // --- end reconciliation safety net ---
-
       editor.onDidChangeModelContent(() => {
         const model = editor.getModel();
         if (model) {
           monaco.editor.setModelMarkers(model, "execution-error", []);
         }
         pushCursorState();
-        scheduleReconcile();
       });
 
       if (ytextRef.current) {
