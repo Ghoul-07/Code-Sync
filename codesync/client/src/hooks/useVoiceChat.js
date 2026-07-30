@@ -34,12 +34,7 @@ export function useVoiceChat(socket, roomId, username) {
 
   const isSelfSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
-  const peersRef = useRef(new Map()); // Map<socketId, peerInstance | "pending">
-
-  useEffect(() => {
-    window.__voicePeers = peersRef.current;
-  }, [peers]);
-  
+  const peersRef = useRef(new Map()); // Map<socketId, peerInstance | "pending"> 
   const pendingSignalsRef = useRef(new Map()); // Map<socketId, signalData[]> — queued while peer is "pending"
   const remoteStreamsRef = useRef(new Map());
   const localStreamRef = useRef(null);
@@ -90,7 +85,6 @@ export function useVoiceChat(socket, roomId, username) {
     });
 
     peer.on("close", () => {
-      console.log(`[PEER CLOSE] ${userToSignal} at ${new Date().toISOString()}`);
       peersRef.current.delete(userToSignal);
       pendingSignalsRef.current.delete(userToSignal);
 
@@ -144,7 +138,6 @@ export function useVoiceChat(socket, roomId, username) {
     });
 
     peer.on("close", () => {
-      console.log(`[PEER CLOSE] ${callerSocketId} at ${new Date().toISOString()}`);
       peersRef.current.delete(callerSocketId);
       pendingSignalsRef.current.delete(callerSocketId);
 
@@ -287,7 +280,6 @@ export function useVoiceChat(socket, roomId, username) {
     if (!socket || !roomId || !username) return;
 
     const handleUserJoined = async ({ socketId: newUserSocketId }) => {
-      console.log(`[JOIN] ${newUserSocketId} at ${new Date().toISOString()}`);
 
       // Covers both an existing real peer AND a "pending" placeholder
       if (peersRef.current.has(newUserSocketId)) return;
@@ -378,7 +370,6 @@ export function useVoiceChat(socket, roomId, username) {
     };
 
     const handleUserLeft = ({ socketId: leftUserId }) => {
-      console.log(`[LEFT] ${leftUserId} at ${new Date().toISOString()}`);
       const peer = peersRef.current.get(leftUserId);
       pendingSignalsRef.current.delete(leftUserId);
 
