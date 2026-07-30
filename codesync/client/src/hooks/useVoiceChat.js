@@ -18,9 +18,7 @@ const fetchIceServers = async () => {
       return { iceServers: STUN_FALLBACK };
     }
 
-    // 📍 FIX: Direct assignment (no useless await on res.data)
-    const iceServers = res.data; 
-    console.log(res);
+    const iceServers = res.data;
     return { iceServers };
   } catch (err) {
     console.warn("[VOICE CHAT] Backend TURN fetch failed, falling back to public STUN:", err);
@@ -29,7 +27,6 @@ const fetchIceServers = async () => {
 };
 
 export function useVoiceChat(socket, roomId, username) {
-  // Store remote streams for UI rendering: [{ socketId, stream, peer }]
   const [peers, setPeers] = useState([]);
   const [isMuted, setIsMuted] = useState(false);
   const [speakingUsers, setSpeakingUsers] = useState(new Set());
@@ -37,13 +34,23 @@ export function useVoiceChat(socket, roomId, username) {
 
   const isSelfSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
-  const peersRef = useRef(new Map()); // Map<socketId, peerInstance>
-  const remoteStreamsRef = useRef(new Map()); // Map<socketId, MediaStream>
+  const peersRef = useRef(new Map()); // Map<socketId, peerInstance | "pending">
+  const pendingSignalsRef = useRef(new Map()); // Map<socketId, signalData[]> — queued while peer is "pending"
+  const remoteStreamsRef = useRef(new Map());
   const localStreamRef = useRef(null);
-  const streamReadyRef = useRef(null); // Promise reference
+  const streamReadyRef = useRef(null);
   const audioContextRef = useRef(null);
   const animationFrameRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
+
+  // Flush any signal messages that arrived while a peer was still being constructed
+  function flushPendingSignals(socketId, peer) {
+    const queued = pendingSignalsRef.current.get(socketId);
+    if (queued && queued.length) {
+      queued.forEach((sig) => peer.signal(sig));
+    }
+    pendingSignalsRef.current.delete(socketId);
+  }
 
   // Helper: Create initiator Peer (Offer)
   async function createPeer(userToSignal, stream) {
@@ -80,6 +87,7 @@ export function useVoiceChat(socket, roomId, username) {
     peer.on("close", () => {
       console.log(`[PEER CLOSE] ${userToSignal} at ${new Date().toISOString()}`);
       peersRef.current.delete(userToSignal);
+      pendingSignalsRef.current.delete(userToSignal);
 
       const remoteStream = remoteStreamsRef.current.get(userToSignal);
       if (remoteStream) {
@@ -133,6 +141,7 @@ export function useVoiceChat(socket, roomId, username) {
     peer.on("close", () => {
       console.log(`[PEER CLOSE] ${callerSocketId} at ${new Date().toISOString()}`);
       peersRef.current.delete(callerSocketId);
+      pendingSignalsRef.current.delete(callerSocketId);
 
       const remoteStream = remoteStreamsRef.current.get(callerSocketId);
       if (remoteStream) {
@@ -273,19 +282,32 @@ export function useVoiceChat(socket, roomId, username) {
     if (!socket || !roomId || !username) return;
 
     const handleUserJoined = async ({ socketId: newUserSocketId }) => {
-      console.log(`[JOIN] ${newUserSocketId} at ${new Date().toISOString()} — destroying peer`)
+      console.log(`[JOIN] ${newUserSocketId} at ${new Date().toISOString()}`);
+
+      // Covers both an existing real peer AND a "pending" placeholder
       if (peersRef.current.has(newUserSocketId)) return;
+
+      // Reserve the slot SYNCHRONOUSLY, before any await
+      // Any webrtc-offer/answer messages for this socketId that arrive while
+      // we're still fetching TURN creds / stream get queued instead of
+      // spawning a second Peer.
+      peersRef.current.set(newUserSocketId, "pending");
 
       const streamPromise = streamReadyRef.current;
-      if (!streamPromise) return;
+      if (!streamPromise) {
+        peersRef.current.delete(newUserSocketId);
+        return;
+      }
 
       const stream = await streamPromise;
-      if (!stream) return;
-
-      if (peersRef.current.has(newUserSocketId)) return;
+      if (!stream) {
+        peersRef.current.delete(newUserSocketId);
+        return;
+      }
 
       const peer = await createPeer(newUserSocketId, stream);
       peersRef.current.set(newUserSocketId, peer);
+      flushPendingSignals(newUserSocketId, peer);
 
       setPeers((prev) => [
         ...prev,
@@ -296,22 +318,38 @@ export function useVoiceChat(socket, roomId, username) {
     const handleWebRTCOffer = async ({ fromSocketId, offer }) => {
       const existingPeer = peersRef.current.get(fromSocketId);
 
-      // 📍 FIX: Pass `offer` into existingPeer.signal(offer)
+      if (existingPeer === "pending") {
+        // Peer construction already in flight — queue this offer/candidate
+        // instead of racing a second addPeer() call
+        const q = pendingSignalsRef.current.get(fromSocketId) || [];
+        q.push(offer);
+        pendingSignalsRef.current.set(fromSocketId, q);
+        return;
+      }
+
       if (existingPeer) {
         existingPeer.signal(offer);
         return;
       }
 
+      // Reserve the slot SYNCHRONOUSLY before any await
+      peersRef.current.set(fromSocketId, "pending");
+
       const streamPromise = streamReadyRef.current;
-      if (!streamPromise) return;
+      if (!streamPromise) {
+        peersRef.current.delete(fromSocketId);
+        return;
+      }
 
       const stream = await streamPromise;
-      if (!stream) return;
-
-      if (peersRef.current.has(fromSocketId)) return;
+      if (!stream) {
+        peersRef.current.delete(fromSocketId);
+        return;
+      }
 
       const peer = await addPeer(offer, fromSocketId, stream);
       peersRef.current.set(fromSocketId, peer);
+      flushPendingSignals(fromSocketId, peer);
 
       setPeers((prev) => [
         ...prev,
@@ -321,16 +359,30 @@ export function useVoiceChat(socket, roomId, username) {
 
     const handleWebRTCAnswer = ({ fromSocketId, answer }) => {
       const peer = peersRef.current.get(fromSocketId);
+
+      if (peer === "pending") {
+        const q = pendingSignalsRef.current.get(fromSocketId) || [];
+        q.push(answer);
+        pendingSignalsRef.current.set(fromSocketId, q);
+        return;
+      }
+
       if (peer) {
         peer.signal(answer);
       }
     };
 
     const handleUserLeft = ({ socketId: leftUserId }) => {
-      console.log(`[LEFT] ${leftUserId} at ${new Date().toISOString()} — destroying peer`)
+      console.log(`[LEFT] ${leftUserId} at ${new Date().toISOString()}`);
       const peer = peersRef.current.get(leftUserId);
-      if (peer) {
+      pendingSignalsRef.current.delete(leftUserId);
+
+      if (peer && peer !== "pending") {
         peer.destroy();
+      } else {
+        // Was still "pending" — just clear the reservation, nothing to destroy
+        peersRef.current.delete(leftUserId);
+        setPeers((prev) => prev.filter((p) => p.socketId !== leftUserId));
       }
     };
 
@@ -368,8 +420,11 @@ export function useVoiceChat(socket, roomId, username) {
     socket.on("room-init", handleRoomInit);
 
     return () => {
-      peersRef.current.forEach((peer) => peer.destroy());
+      peersRef.current.forEach((peer) => {
+        if (peer && peer !== "pending") peer.destroy();
+      });
       peersRef.current.clear();
+      pendingSignalsRef.current.clear();
 
       remoteStreamsRef.current.forEach((stream) => {
         stream.getTracks().forEach((track) => track.stop());
