@@ -17,7 +17,7 @@ export const registerSocketHandlers = (io, socket) =>{
 
     // ----- JOIN-ROOM -----
 
-    socket.on('join-room',  async ({roomId, username, password,preferredColor}) =>{
+    socket.on('join-room',  async ({roomId, username, password,preferredColor, clientId}) =>{
        
         let room = await getRoom(roomId)
 
@@ -30,7 +30,9 @@ export const registerSocketHandlers = (io, socket) =>{
 
         const existingUser = existingUsers.find((u) => u.username === username);
 
-        if(existingUser && existingUser.socketId !== socket.id){
+        const isSameClientReconnecting = existingUser && clientId && existingUser.clientId === clientId
+
+        if(existingUser && existingUser.socketId !== socket.id && !isSameClientReconnecting){
             // check if that socket id is still actively connected to socket.io
           
             const activeSockets = await io.in(roomId).fetchSockets()
@@ -58,21 +60,22 @@ export const registerSocketHandlers = (io, socket) =>{
         : [];
 
         const usedColors = new Set(existingUsers.map((u) => u.color))
-        const userColor = preferredColor || USER_COLORS.find((c) => !usedColors.has(c))
+        const userColor = existingUser?.color || preferredColor || USER_COLORS.find((c) => !usedColors.has(c))
 
         socket.username = username
         socket.roomId = roomId        
         socket.color = userColor
+        socket.clientId = clientId
 
          // save user to redis store
         const { updatedUsers } = await addUserToRoom(roomId, {
             socketId:socket.id,
             username,
-            color:userColor
+            color:userColor,
+            clientId
         })
 
-    
-        
+
         const chatHistory = await getRoomChats(roomId)        // fetch chats from redis
 
         // send current document state and full user list to the joinig user

@@ -32,6 +32,16 @@ function EditorPage() {
     return sessionStorage.getItem(`room_color_${roomId}`) || null;
   });
 
+  const [clientId] = useState(() => {
+    const key = `room_client_id_${roomId}`;
+    let id = sessionStorage.getItem(key);
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  });
+
   const [code, setCode] = useState("");
   const [activeUsers, setActiveUsers] = useState([]);
   const editorRef = useRef(null);
@@ -153,6 +163,7 @@ function EditorPage() {
         username,
         password,
         preferredColor,
+        clientId,
       });
     };
 

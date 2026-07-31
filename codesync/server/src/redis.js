@@ -75,7 +75,6 @@ export async function addUserToRoom(roomId, user){
         return true;
     });
 
-    
     updatedUsers.push(user)
     
     await pubClient.hset(
@@ -108,8 +107,7 @@ export async function removeUserFromRoom(roomId, socketId, username) {
         local updated = {}
         for _, u in ipairs(users) do
             local matchesSocket = (ARGV[1] ~= '' and u.socketId == ARGV[1])
-            local matchesUsername = (ARGV[2] ~= '' and u.username == ARGV[2])
-            if not (matchesSocket or matchesUsername) then
+            if not matchesSocket then
                 table.insert(updated, u)
             end
         end
