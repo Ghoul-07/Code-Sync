@@ -70,7 +70,9 @@ server.on('upgrade', (request, socket, head) =>{
 })
 
 wss.on('connection', (conn, req) =>{
-    setupWSConnection(conn, req)
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const docName = url.pathname.slice(1)
+    setupWSConnection(conn, req, {docName})
 })
 
 // ----------------------------------------------------------------------------------------------------------

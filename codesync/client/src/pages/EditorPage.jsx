@@ -591,7 +591,6 @@ function EditorPage() {
                 color={userColor}
                 serverUrl={import.meta.env.VITE_WS_URL || "ws://localhost:5000"}
                 onCodeChange={(newCode) => {
-                  setCode(newCode);
                   updateExecutionMarkers("", false);
                 }}
                 onTerminalSync={({ output, isError, executionTime }) => {

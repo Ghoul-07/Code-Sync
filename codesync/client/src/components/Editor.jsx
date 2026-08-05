@@ -45,9 +45,7 @@ const Editor = forwardRef(
     const ytextRef = useRef(null);
 
     const [status, setStatus] = useState("connecting");
-
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-
     const remoteDecorations = useRef(new Map());
 
     useImperativeHandle(ref, () => ({
@@ -76,8 +74,7 @@ const Editor = forwardRef(
       },
     }));
 
-    // Layout Observer to dynamically calculate Monaco width on window resize
-
+    // Layout Observer for window resize
     useEffect(() => {
       const handleResize = () => setIsMobile(window.innerWidth <= 768);
       window.addEventListener("resize", handleResize);
@@ -99,7 +96,7 @@ const Editor = forwardRef(
       };
     }, []);
 
-    // Re-bind MonacoBinding & Awareness listeners (handles initial mount AND Vite restarts)
+    // Re-bind Y.text <--> Monaco Editor
     const setupBinding = () => {
       if (!editorRef.current || !ydocRef.current || !providerRef.current)
         return;
@@ -114,24 +111,20 @@ const Editor = forwardRef(
         bindingRef.current = null;
       }
 
-      // 1. Re-bind Y.text <--> Monaco Editor
       bindingRef.current = new MonacoBinding(
         ytext,
         editor.getModel(),
         new Set([editor]),
       );
 
-      // 2. Re-attach Awareness Observer for Remote Cursors
-      provider.awareness.off("change", handleAwarenessChange); // prevent duplicates
+      provider.awareness.off("change", handleAwarenessChange);
       provider.awareness.on("change", handleAwarenessChange);
 
-      // 3. Re-publish initial awareness user state
       provider.awareness.setLocalStateField("user", {
         username,
         color,
       });
 
-      // 4. Force awareness cursor update so remote users instantly see cursor on reconnect
       const selection = editor.getSelection();
       if (selection) {
         provider.awareness.setLocalStateField("cursor", {
@@ -146,13 +139,13 @@ const Editor = forwardRef(
       }
     };
 
+    // Safely update user info without re-creating WebSocket connection
     useEffect(() => {
       if (providerRef.current && providerRef.current.awareness) {
         providerRef.current.awareness.setLocalStateField("user", {
           username,
           color,
         });
-        // Trigger cursor decoration updates locally and remotely
         handleAwarenessChange();
       }
     }, [username, color]);
@@ -164,14 +157,12 @@ const Editor = forwardRef(
       const states = provider.awareness.getStates();
       const currentClientIds = new Set(states.keys());
 
-      // Remove decorations for disconnected clients
       remoteDecorations.current.forEach((_, clientId) => {
         if (!currentClientIds.has(clientId)) {
           removeRemoteCursor(clientId);
         }
       });
 
-      // Render decorations for active clients
       states.forEach((state, clientId) => {
         if (clientId === provider.awareness.clientID) return;
 
@@ -189,9 +180,7 @@ const Editor = forwardRef(
       });
     };
 
-    // ------------------------------------------------------------------
-    // Yjs & Provider Lifecycle
-    // ------------------------------------------------------------------
+    // Yjs & Provider Lifecycle (Isolate dependency array to roomId & serverUrl ONLY)
     useEffect(() => {
       if (!roomId) return;
 
@@ -207,9 +196,7 @@ const Editor = forwardRef(
       const ytext = ydoc.getText("monaco");
       ytextRef.current = ytext;
 
-      // shared map for terminal state
       const yterminal = ydoc.getMap("terminal");
-
       yterminal.observe(() => {
         const terminalData = yterminal.toJSON();
         if (
@@ -221,7 +208,6 @@ const Editor = forwardRef(
         }
       });
 
-      // Track Network Status
       const handleStatus = (event) => {
         if (!navigator.onLine) {
           setStatus("disconnected");
@@ -231,16 +217,14 @@ const Editor = forwardRef(
       };
       provider.on("status", handleStatus);
 
-      // Handle Sync & Reconnections
       const handleSync = (isSynced) => {
         if (isSynced) {
           setStatus("connected");
-          setupBinding(); // Re-binds Monaco AND cursor awareness listeners
+          setupBinding();
 
-          // hydrate terminal on rejoin/refresh
-          if (ydoc.current) {
-            const yterminal = ydoc.current.getMap("terminal");
-            const terminalData = yterminal.toJSON();
+          if (ydocRef.current) {
+            const yterm = ydocRef.current.getMap("terminal");
+            const terminalData = yterm.toJSON();
             if (
               terminalData &&
               terminalData.output !== undefined &&
@@ -253,7 +237,6 @@ const Editor = forwardRef(
       };
       provider.on("sync", handleSync);
 
-      // Browser Network Handlers
       const handleOnline = () => {
         setStatus("connecting");
         if (provider) provider.connect();
@@ -267,7 +250,6 @@ const Editor = forwardRef(
       window.addEventListener("online", handleOnline);
       window.addEventListener("offline", handleOffline);
 
-      // Cleanup
       return () => {
         window.removeEventListener("online", handleOnline);
         window.removeEventListener("offline", handleOffline);
@@ -288,11 +270,9 @@ const Editor = forwardRef(
         provider.destroy();
         ydoc.destroy();
       };
-    }, [roomId, serverUrl, username, color]);
+    }, [roomId, serverUrl]);
 
-    // ------------------------------------------------------------------
     // Monaco Editor Mount
-    // ------------------------------------------------------------------
     const handleEditorDidMount = (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
@@ -323,14 +303,7 @@ const Editor = forwardRef(
         });
       };
 
-      editor.onDidChangeModelContent(() => {
-        const model = editor.getModel();
-        if (model) {
-          monaco.editor.setModelMarkers(model, "execution-error", []);
-        }
-        pushCursorState();
-      });
-
+      // Observe Y.Text changes cleanly
       if (ytextRef.current) {
         ytextRef.current.observe(() => {
           if (onCodeChange) {
@@ -359,7 +332,6 @@ const Editor = forwardRef(
 
       const newDecorations = [];
 
-      // Draw vertical cursor bar at user's position
       if (cursor) {
         const isLineOne = cursor.lineNumber === 1;
         newDecorations.push({
@@ -376,7 +348,6 @@ const Editor = forwardRef(
         });
       }
 
-      // Draw selection highlight if text is highlighted
       if (
         selection &&
         (selection.startLineNumber !== selection.endLineNumber ||
@@ -420,7 +391,6 @@ const Editor = forwardRef(
           overflow: "hidden",
         }}
       >
-        {/* Connection Status Badge */}
         <div
           style={{
             position: "absolute",
@@ -490,10 +460,16 @@ const Editor = forwardRef(
             automaticLayout: true,
             tabSize: 2,
             wordWrap: "on",
-            overviewRulerLanes: 0, // Disables vertical overview ruler line
-            hideCursorInOverviewRuler: true, // Cleans up right edge gutter
+            // Mobile IME auto-complete fixes (prevents character mangling)
+            autoClosingBrackets: isMobile ? "never" : "always",
+            autoClosingQuotes: isMobile ? "never" : "always",
+            autoSurround: isMobile ? "never" : "languageDefined",
+            acceptSuggestionOnEnter: isMobile ? "off" : "on",
+            quickSuggestions: isMobile ? false : true,
+            overviewRulerLanes: 0,
+            hideCursorInOverviewRuler: true,
             scrollbar: {
-              verticalScrollbarSize: 8, // Slimmer vertical scrollbar
+              verticalScrollbarSize: 8,
               horizontalScrollbarSize: 8,
             },
             padding: { bottom: 40 },
@@ -506,7 +482,6 @@ const Editor = forwardRef(
   },
 );
 
-// CSS overlay injection for username badge & vertical cursor line
 function injectCursorStyle(classPrefix, color, username) {
   const styleId = `cursor-style-${classPrefix}`;
   const existingStyle = document.getElementById(styleId);
