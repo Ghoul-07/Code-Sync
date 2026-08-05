@@ -303,14 +303,12 @@ const Editor = forwardRef(
         });
       };
 
-      // Observe Y.Text changes cleanly
-      if (ytextRef.current) {
-        ytextRef.current.observe(() => {
-          if (onCodeChange) {
-            onCodeChange(ytextRef.current.toString());
-          }
-        });
-      }
+      editor.onDidChangeModelContent(() => {
+        const model = editor.getModel();
+        if (model) {
+          monaco.editor.setModelMarkers(model, "execution-error", []);
+        }
+      });
 
       editor.onDidChangeCursorPosition(pushCursorState);
     };
@@ -461,12 +459,9 @@ const Editor = forwardRef(
             tabSize: 2,
             wordWrap: "on",
             // Mobile IME auto-complete fixes (prevents character mangling)
-            autoClosingBrackets: "never",
-            autoClosingQuotes: "never",
-            autoSurround: "never",
-            autoClosingOvertype: "never",
-
-            compositionMode: "disabled",
+            autoClosingBrackets: isMobile ? "never" : "always",
+            autoClosingQuotes: isMobile ? "never" : "always",
+            autoSurround: isMobile ? "never" : "languageDefined",
 
             acceptSuggestionOnEnter: isMobile ? "off" : "on",
             quickSuggestions: isMobile ? false : true,
