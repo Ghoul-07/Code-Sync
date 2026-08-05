@@ -461,11 +461,16 @@ const Editor = forwardRef(
             tabSize: 2,
             wordWrap: "on",
             // Mobile IME auto-complete fixes (prevents character mangling)
-            autoClosingBrackets: isMobile ? "never" : "always",
-            autoClosingQuotes: isMobile ? "never" : "always",
-            autoSurround: isMobile ? "never" : "languageDefined",
+            autoClosingBrackets: "never",
+            autoClosingQuotes: "never",
+            autoSurround: "never",
+            autoClosingOvertype: "never",
+
+            compositionMode: "disabled",
+
             acceptSuggestionOnEnter: isMobile ? "off" : "on",
             quickSuggestions: isMobile ? false : true,
+
             overviewRulerLanes: 0,
             hideCursorInOverviewRuler: true,
             scrollbar: {
